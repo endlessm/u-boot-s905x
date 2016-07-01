@@ -16,7 +16,7 @@ OBJDUMP=$(CROSS_COMPILE)objdump
 
 ARM_ARCH=armv7-m
 ARM_CPU=cortex-m3
-CFLAGS_WARN=-Wall -Werror -Wundef -Wstrict-prototypes -Wno-trigraphs      \
+CFLAGS_WARN=-Wall -Wundef -Wstrict-prototypes -Wno-trigraphs      \
             -fno-strict-aliasing -fno-common -fomit-frame-pointer         \
             -Werror-implicit-function-declaration -Wno-format-security    \
             -fno-delete-null-pointer-checks -Wdeclaration-after-statement \
