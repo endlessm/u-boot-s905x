@@ -270,6 +270,7 @@
 #endif
 
 #define	CONFIG_PARTITIONS 1
+#define CONFIG_EFI_PARTITION 1
 #define CONFIG_SYS_NO_FLASH  1
 
 /* vpu */
@@ -343,6 +344,7 @@
 #define CONFIG_CMD_I2C 1
 #define CONFIG_CMD_MEMORY 1
 #define CONFIG_CMD_FAT 1
+#define CONFIG_CMD_EXT4 1
 #define CONFIG_CMD_GPIO 1
 #define CONFIG_CMD_RUN
 #define CONFIG_CMD_REBOOT 1
@@ -408,6 +410,8 @@
 
 //board customer ID
 //#define CONFIG_CUSTOMER_ID  (0x6472616F624C4D41)
+
+#define CONFIG_SUPPORT_RAW_INITRD
 
 #if defined(CONFIG_CUSTOMER_ID)
   #undef CONFIG_AML_CUSTOMER_ID
