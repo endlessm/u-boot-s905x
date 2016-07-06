@@ -71,9 +71,39 @@
 #define CONFIG_SYS_MAXARGS  64
 #define CONFIG_EXTRA_ENV_SETTINGS \
         "fdt_high=0x20000000\0"\
+        "testfile=/boot/Image\0"\
+        "loadaddr=0x11000000\0"\
+        "dtb_loadaddr=0x1000000\0"\
+        "initrd_loadaddr=0x13000000\0"\
+        "script_loadaddr=0x11000000\0"\
+        "load_boot_env="\
+            "echo >>> Load Boot Script <<<;"\
+            "ext4load mmc ${bootdev}:1 ${script_loadaddr} /boot/uEnv.txt;"\
+            "\0"\
+        "import_boot_env="\
+            "echo >>> Importing environment <<<;"\
+            "env import -t ${script_loadaddr} ${filesize};"\
+            "\0"\
+        "uenv_bootcmd="\
+            "echo >>> Booting <<<;"\
+            "ext4load mmc ${bootdev}:1 ${loadaddr} /boot/Image;"\
+            "ext4load mmc ${bootdev}:1 ${initrd_loadaddr} /boot/uInitrd;"\
+            "ext4load mmc ${bootdev}:1 ${dtb_loadaddr} /boot/endless_s905x.dtb;"\
+            "booti ${loadaddr} ${initrd_loadaddr} ${dtb_loadaddr};"\
+            "\0"\
+        "endless_select_bootdev="\
+            "if test -e mmc 0:1 ${testfile}; then "\
+                "setenv bootdev 0;"\
+            "else if test -e mmc 1:1 ${testfile}; then "\
+                "setenv bootdev 1;"\
+            "fi;fi;"\
+            "run endless_boot;"\
+            "\0"\
+        "endless_boot="\
+            "run load_boot_env; run import_boot_env; setenv bootargs console=ttyS0,115200 ${bootargs}; run uenv_bootcmd;"\
             "\0"\
 
-#define CONFIG_BOOTCOMMAND ""
+#define CONFIG_BOOTCOMMAND "run endless_select_bootdev"
 
 #define CONFIG_ENV_IS_NOWHERE  1
 #define CONFIG_ENV_SIZE   (64*1024)
@@ -229,7 +259,7 @@
 /* other functions */
 #define CONFIG_NEED_BL301	1
 #define CONFIG_NEED_BL32	1
-#define CONFIG_CMD_RSVMEM	1
+//#define CONFIG_CMD_RSVMEM	1
 #define CONFIG_FIP_IMG_SUPPORT	1
 #define CONFIG_BOOTDELAY	1 //delay 1s
 #define CONFIG_SYS_LONGHELP 1
