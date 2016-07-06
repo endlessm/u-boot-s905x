@@ -403,41 +403,6 @@ U_BOOT_CMD(hdmi_init, CONFIG_SYS_MAXARGS, 0, do_hdmi_init,
 #endif
 #ifdef CONFIG_BOARD_LATE_INIT
 int board_late_init(void){
-	int ret;
-
-	//update env before anyone using it
-	run_command("get_rebootmode; echo reboot_mode=${reboot_mode}; "\
-			"if test ${reboot_mode} = factory_reset; then "\
-			"defenv_reserv aml_dt;setenv upgrade_step 2;save; fi;", 0);
-	run_command("if itest ${upgrade_step} == 1; then "\
-				"defenv_reserv; setenv upgrade_step 2; saveenv; fi;", 0);
-
-#ifndef CONFIG_AML_IRDETECT_EARLY
-	/* after  */
-	run_command("cvbs init;hdmitx hpd", 0);
-	run_command("vout output $outputmode", 0);
-#endif
-	/*add board late init function here*/
-	ret = run_command("store dtb read $dtb_mem_addr", 1);
-	if (ret) {
-		printf("%s(): [store dtb read $dtb_mem_addr] fail\n", __func__);
-		#ifdef CONFIG_DTB_MEM_ADDR
-		char cmd[64];
-		printf("load dtb to %x\n", CONFIG_DTB_MEM_ADDR);
-		sprintf(cmd, "store dtb read %x", CONFIG_DTB_MEM_ADDR);
-		ret = run_command(cmd, 1);
-		if (ret) {
-			printf("%s(): %s fail\n", __func__, cmd);
-		}
-		#endif
-	}
-#ifdef CONFIG_AML_V2_FACTORY_BURN
-	aml_try_factory_sdcard_burning(0, gd->bd);
-#endif// #ifdef CONFIG_AML_V2_FACTORY_BURN
-
-	if (get_cpu_id().family_id == MESON_CPU_MAJOR_ID_GXL) {
-		setenv("maxcpus","4");
-	}
 	return 0;
 }
 #endif
