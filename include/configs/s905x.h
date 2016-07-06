@@ -251,7 +251,7 @@
 
 /* storage: emmc/nand/sd */
 #define	CONFIG_STORE_COMPATIBLE 1
-#define CONFIG_AML_NAND	1
+//#define CONFIG_AML_NAND	1
 /* env */
 #define 	CONFIG_ENV_OVERWRITE
 #define 	CONFIG_CMD_SAVEENV
