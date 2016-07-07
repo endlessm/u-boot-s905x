@@ -68,11 +68,11 @@ void pwm_set_voltage(unsigned int id, unsigned int voltage)
 static void hdmi_5v_ctrl(unsigned int ctrl)
 {
 	if (ctrl == ON) {
+		/* VCC5V ON GPIOH_3 output mode*/
 		aml_update_bits(PREG_PAD_GPIO1_EN_N, 1 << 23, 0);
-		aml_update_bits(PREG_PAD_GPIO1_O, 1 << 23, 0);
 	} else {
-		aml_update_bits(PREG_PAD_GPIO1_EN_N, 1 << 23, 0);
-		aml_update_bits(PREG_PAD_GPIO1_O, 1 << 23, 1 << 23);
+		/* VCC5V OFF GPIOH_3 input mode*/
+		aml_update_bits(PREG_PAD_GPIO1_EN_N, 1 << 23, 1 << 23);
 	}
 }
 /*GPIODV_25*/
@@ -108,10 +108,6 @@ static void power_off_at_24M(void)
 	/* LED GPIODV_24*/
 	aml_update_bits(PREG_PAD_GPIO0_EN_N, 1 << 24, 0);
 	aml_update_bits(PREG_PAD_GPIO0_O, 1 << 24, 0);
-
-	/* VCC5V OFF */
-	aml_update_bits(PREG_PAD_GPIO1_EN_N, 1 << 23, 1 << 23); //GPIOH_3 input mode
-
 }
 
 static void power_on_at_24M(void)
@@ -119,8 +115,6 @@ static void power_on_at_24M(void)
 	aml_update_bits(PREG_PAD_GPIO0_EN_N, 1 << 24, 0);
 	aml_update_bits(PREG_PAD_GPIO0_O, 1 << 24, 1 << 24);
 
-	/* VCC5V ON */
-	aml_update_bits(PREG_PAD_GPIO1_EN_N, 1 << 23, 0); //GPIOH_3 output mode
 }
 
 static void power_off_at_32k(void)
@@ -138,7 +132,8 @@ void get_wakeup_source(void *response, unsigned int suspend_from)
 	struct wakeup_gpio_info *gpio;
 
 	p->status = RESPONSE_OK;
-	val = (POWER_KEY_WAKEUP_SRC | AUTO_WAKEUP_SRC | REMOTE_WAKEUP_SRC);
+	val = (POWER_KEY_WAKEUP_SRC | AUTO_WAKEUP_SRC | REMOTE_WAKEUP_SRC |
+	       BT_WAKEUP_SRC);
 #ifdef CONFIG_CEC_WAKEUP
 	if (suspend_from != SYS_POWEROFF)
 		val |= CEC_WAKEUP_SRC;
@@ -154,8 +149,18 @@ void get_wakeup_source(void *response, unsigned int suspend_from)
 	gpio->gpio_out_ao = -1;
 	gpio->irq = IRQ_AO_GPIO0_NUM;
 	gpio->trig_type = GPIO_IRQ_FALLING_EDGE;
+	p->gpio_info_count ++;
 
-	p->gpio_info_count = 1;
+	gpio = &(p->gpio_info[1]);
+	gpio->wakeup_id = BT_WAKEUP_SRC;
+	gpio->gpio_in_idx = GPIOX_18;
+	gpio->gpio_in_ao = 0;
+	gpio->gpio_out_idx = -1;
+	gpio->gpio_out_ao = -1;
+	gpio->irq = IRQ_GPIO0_NUM;
+	gpio->trig_type	= GPIO_IRQ_FALLING_EDGE;
+	p->gpio_info_count ++;
+
 }
 void wakeup_timer_setup(void)
 {
@@ -180,8 +185,8 @@ static unsigned int detect_key(unsigned int suspend_from)
 	int exit_reason = 0;
 	unsigned int time_out = readl(AO_DEBUG_REG2);
 	unsigned time_out_ms = time_out*100;
-	unsigned *irq = (unsigned *)SECURE_TASK_SHARE_IRQ;
 	unsigned int ret;
+	unsigned *irq = (unsigned *)WAKEUP_SRC_IRQ_ADDR_BASE;
 	/* unsigned *wakeup_en = (unsigned *)SECURE_TASK_RESPONSE_WAKEUP_EN; */
 
 	/* setup wakeup resources*/
@@ -199,11 +204,11 @@ static unsigned int detect_key(unsigned int suspend_from)
 
 	/* *wakeup_en = 1;*/
 	do {
-		switch (*irq) {
 #ifdef CONFIG_CEC_WAKEUP
-		case IRQ_AO_CEC_NUM:
+		if (irq[IRQ_AO_CEC] == IRQ_AO_CEC_NUM) {
+			irq[IRQ_AO_CEC] = 0xFFFFFFFF;
 			if (suspend_from == SYS_POWEROFF)
-				break;
+				continue;
 			if (cec_msg.log_addr) {
 				if (hdmi_cec_func_config & 0x1) {
 					cec_handler();
@@ -215,40 +220,44 @@ static unsigned int detect_key(unsigned int suspend_from)
 				}
 			} else if (hdmi_cec_func_config & 0x1)
 				cec_node_init();
-		break;
+		}
 #endif
-		case IRQ_TIMERA_NUM:
+		if (irq[IRQ_TIMERA] == IRQ_TIMERA_NUM) {
+			irq[IRQ_TIMERA] = 0xFFFFFFFF;
 			if (time_out_ms != 0)
 				time_out_ms--;
 			if (time_out_ms == 0) {
 				wakeup_timer_clear();
 				exit_reason = AUTO_WAKEUP;
 			}
-			break;
+		}
 
-		case IRQ_AO_IR_DEC_NUM:
+		if (irq[IRQ_AO_IR_DEC] == IRQ_AO_IR_DEC_NUM) {
+			irq[IRQ_AO_IR_DEC] = 0xFFFFFFFF;
 			ret = remote_detect_key();
 			if (ret == 1)
 				exit_reason = REMOTE_WAKEUP;
 			if (ret == 2)
 				exit_reason = REMOTE_CUS_WAKEUP;
-			break;
+		}
 
-		case IRQ_AO_GPIO0_NUM:
+		if (irq[IRQ_AO_GPIO0] == IRQ_AO_GPIO0_NUM) {
+			irq[IRQ_AO_GPIO0] = 0xFFFFFFFF;
 			if ((readl(AO_GPIO_I) & (1<<2)) == 0)
 				exit_reason = POWER_KEY_WAKEUP;
-			break;
-
-		default:
-			break;
 		}
-		*irq = 0xffffffff;
+		if (irq[IRQ_GPIO0] == IRQ_GPIO0_NUM) {
+			irq[IRQ_GPIO0] = 0xFFFFFFFF;
+			if (!(readl(PREG_PAD_GPIO4_I) & (0x01 << 18)))
+				exit_reason = BT_WAKEUP;
+		}
 		if (exit_reason)
 			break;
 		else
 			asm volatile("wfi");
 	} while (1);
 
+	wakeup_timer_clear();
 	return exit_reason;
 }
 

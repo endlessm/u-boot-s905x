@@ -24,16 +24,15 @@
 #define LDIMPR(fmt, args...)     printf("ldim: "fmt"", ## args)
 #define LDIMERR(fmt, args...)    printf("ldim: error: "fmt"", ## args)
 
+#define LD_DATA_DEPTH   12
+#define LD_DATA_MAX     0xfff
+
 extern void bl_pwm_ctrl(struct bl_pwm_config_s *bl_pwm, int status);
 #ifdef CONFIG_OF_LIBFDT
 extern enum bl_pwm_port_e bl_pwm_str_to_pwm(const char *str);
 #endif
 
 /* ldim device probe function */
-#ifdef CONFIG_AML_SPICC
-#ifdef CONFIG_AML_LOCAL_DIMMING_IW7019
-extern int aml_ldim_iw7019_probe(char *dt_addr);
-#endif
-#endif
+extern int aml_ldim_device_probe(char *dt_addr);
 
 #endif

@@ -1,6 +1,6 @@
 
 /*
- * include/configs/gxtvbb_p310_v1.h
+ * board/amlogic/configs/gxtvbb_p310_v1.h
  *
  * Copyright (C) 2015 Amlogic, Inc. All rights reserved.
  *
@@ -38,8 +38,8 @@
 #define CONFIG_VDDEE_SLEEP_VOLTAGE	 850		// voltage for suspend
 
 /* configs for CEC */
-#define CONFIG_CEC_OSD_NAME		"Mbox"
-//#define CONFIG_CEC_WAKEUP
+#define CONFIG_CEC_OSD_NAME		"AML_TV"
+#define CONFIG_CEC_WAKEUP
 
 #define CONFIG_INSTABOOT
 
@@ -93,6 +93,7 @@
 	"sdc_burning=sdc_burn ${sdcburncfg}\0"\
 	"wipe_data=successful\0"\
 	"wipe_cache=successful\0"\
+	"EnableSelinux=enforcing\0" \
 	"jtag=apao\0"\
 	"upgrade_check="\
 		"echo upgrade_step=${upgrade_step}; "\
@@ -104,7 +105,7 @@
 		"setenv bootargs rootfstype=ramfs init=/init "\
 		"console=ttyS0,115200 no_console_suspend "\
 		"earlyprintk=aml-uart,0xc81004c0 "\
-		"androidboot.selinux=enforcing "\
+		"androidboot.selinux=${EnableSelinux} "\
 		"logo=${display_layer},loaded,${fb_addr} "\
 		"vout=${outputmode},enable "\
 		"osd_reverse=${osd_reverse} video_reverse=${video_reverse} "\
@@ -163,6 +164,7 @@
 		"run recovery_from_flash; "\
 		"\0"\
 	"recovery_from_sdcard="\
+	      "setenv bootargs ${bootargs} aml_dt=${aml_dt};"\
 		"if fatload mmc 0 ${loadaddr} aml_autoscript; then "\
 			"autoscr ${loadaddr}; "\
 		"fi; "\
@@ -175,6 +177,7 @@
 		"fi; "\
 		"\0"\
 	"recovery_from_udisk="\
+	      "setenv bootargs ${bootargs} aml_dt=${aml_dt};"\
 		"if fatload usb 0 ${loadaddr} aml_autoscript; then "\
 			"autoscr ${loadaddr}; "\
 		"fi; "\
@@ -251,7 +254,7 @@
 #define CONFIG_DDR_ZQ_POWER_DOWN
 #define CONFIG_DDR_POWER_DOWN_PHY_VREF
 /* ddr detection */
-#define CONFIG_DDR_SIZE_AUTO_DETECT		1 //0:disable, 1:enable
+#define CONFIG_DDR_SIZE_AUTO_DETECT		0 //0:disable, 1:enable
 
 /* storage: emmc/nand/sd */
 #define		CONFIG_STORE_COMPATIBLE 1
@@ -264,7 +267,7 @@
 	#define 	CONFIG_GENERIC_MMC 1
 	#define 	CONFIG_CMD_MMC 1
 	#define CONFIG_EMMC_DDR52_EN 1
-	#define CONFIG_EMMC_DDR52_CLK 35000000
+	#define CONFIG_EMMC_DDR52_CLK 52000000
 #endif
 //#define 	CONFIG_AML_NAND	1
 #ifdef CONFIG_AML_NAND

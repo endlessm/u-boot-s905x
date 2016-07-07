@@ -219,7 +219,8 @@ static int mmc_read_blocks(struct mmc *mmc, void *dst, lbaint_t start,
 {
 	struct mmc_cmd cmd;
 	struct mmc_data data;
-	int ret;
+	int ret = 0, err = 0, err_flag = 0, retries = 0;
+__RETRY:
 	if (blkcnt > 1)
 		cmd.cmdidx = MMC_CMD_READ_MULTIPLE_BLOCK;
 	else
@@ -243,17 +244,27 @@ static int mmc_read_blocks(struct mmc *mmc, void *dst, lbaint_t start,
 		cmd.cmdidx = MMC_CMD_STOP_TRANSMISSION;
 		cmd.cmdarg = 0;
 		cmd.resp_type = MMC_RSP_R1b;
-		if (mmc_send_cmd(mmc, &cmd, NULL)) {
+		err = mmc_send_cmd(mmc, &cmd, NULL);
+		if (err) {
 #if !defined(CONFIG_SPL_BUILD) || defined(CONFIG_SPL_LIBCOMMON_SUPPORT)
 			printf("mmc fail to send stop cmd\n");
 #endif
-			return 0;
 		}
 	}
-	if (ret)
+	if (ret || err) {
+		if (err_flag == 0) {
+			err_flag = 1;
+			retries = 5;
+		}
+		if (retries) {
+			printf("retry read, count: %d\n", retries);
+			retries--;
+			goto __RETRY;
+		}
+		printf("retry read error !!!\n");
 		return 0;
-	else
-		return blkcnt;
+	}
+	return blkcnt;
 }
 
 static ulong mmc_bread(int dev_num, lbaint_t start, lbaint_t blkcnt, void *dst)
@@ -821,6 +832,16 @@ static void mmc_set_ios(struct mmc *mmc)
 		mmc->cfg->ops->set_ios(mmc);
 }
 
+int aml_emmc_refix(struct mmc *mmc)
+{
+	int ret = 0;
+	mmc->refix = 1;
+	mmc->cfg->ops->calibration(mmc);
+	ret = mmc->cfg->ops->refix(mmc);
+	mmc->refix = 0;
+	return ret;
+}
+
 void mmc_set_clock(struct mmc *mmc, uint clock)
 {
 	if (clock > mmc->cfg->f_max)
@@ -1225,6 +1246,19 @@ static int mmc_startup(struct mmc *mmc)
 	}
 
 	mmc_set_clock(mmc, mmc->tran_speed);
+
+	/* refix emmc DDR52 mode*/
+	if (mmc->ddr_mode) {
+		if (!IS_SD(mmc)) {
+			err = aml_emmc_refix(mmc);
+			if (!err)
+				printf("[%s] mmc refix success\n", __func__);
+			else {
+				printf("[%s] mmc refix error\n", __func__);
+				mmc_set_clock(mmc, 26000000);
+			}
+		}
+	}
 
 	/* Fix the block length for DDR mode */
 	if (mmc->ddr_mode) {

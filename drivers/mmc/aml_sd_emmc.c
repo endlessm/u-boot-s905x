@@ -29,6 +29,7 @@
 #ifdef CONFIG_STORE_COMPATIBLE
 #include <storage.h>
 #endif
+#include <asm/cpu_id.h>
 //#define SD_DEBUG_ENABLE
 
 #ifdef SD_DEBUG_ENABLE
@@ -37,6 +38,12 @@
 	#define sd_debug(a...)
 #endif
 
+//#define EMMC_DEBUG_ENABLE
+#ifdef EMMC_DEBUG_ENABLE
+	#define emmc_debug(a...) printf(a);
+#else
+	#define emmc_debug(a...)
+#endif
 
 
 /*
@@ -66,14 +73,18 @@ struct aml_card_sd_info * cpu_sd_emmc_get(unsigned port)
 void aml_sd_cfg_swth(struct mmc *mmc)
 {
 
-	unsigned sd_emmc_clkc =	0,clk,clk_src,clk_div;
+	unsigned sd_emmc_clkc =	0,clk,clk_src,clk_div = 0;
 	unsigned vconf;
 	unsigned bus_width=(mmc->bus_width == 1)?0:mmc->bus_width/4;
 	struct aml_card_sd_info *aml_priv = mmc->priv;
 	struct sd_emmc_global_regs *sd_emmc_reg = aml_priv->sd_emmc_reg;
 	struct sd_emmc_config* sd_emmc_cfg = (struct sd_emmc_config*)&vconf;
 
-	sd_debug("mmc->clock=%d; clk_div=%d\n",mmc->clock ,clk_div);
+	emmc_debug("mmc->clock=%d; clk_div=%d\n",mmc->clock ,clk_div);
+
+	/* reset gdelay , gadjust register */
+	sd_emmc_reg->gdelay = 0;
+	sd_emmc_reg->gadjust = 0;
 
 	if (mmc->clock > 12000000) {
 		clk = SD_EMMC_CLKSRC_DIV2;
@@ -90,8 +101,10 @@ void aml_sd_cfg_swth(struct mmc *mmc)
 
 	clk_div= clk / mmc->clock;
 #if CONFIG_EMMC_DDR52_EN
-	if (mmc->ddr_mode)
+	if (mmc->ddr_mode) {
 		clk_div /= 2;
+		sd_debug("DDR: \n");
+	}
 #endif
 
 	sd_emmc_clkc =((0 << Cfg_irq_sdio_sleep_ds) |
@@ -118,11 +131,10 @@ void aml_sd_cfg_swth(struct mmc *mmc)
 #endif
     sd_emmc_reg->gcfg = vconf;
 
-	sd_debug("bus_width=%d; tclk_div=%d; tclk=%d;sd_clk=%d\n",
-	    bus_width,clk_div,clk,mmc->clock);
-
-	sd_debug("port=%d act_clk=%d\n",aml_priv->sd_emmc_port,clk/(clk_div+1));
-	return;
+    emmc_debug("bus_width=%d; tclk_div=%d; tclk=%d;sd_clk=%d\n",
+        bus_width,clk_div,clk,mmc->clock);
+    emmc_debug("port=%d act_clk=%d\n",aml_priv->sd_emmc_port,clk/clk_div);
+    return;
 }
 
 
@@ -262,7 +274,7 @@ static int sd_inand_staff_init(struct mmc *mmc)
  * Sends a command out on the bus. Takes the mmc pointer,
  * a command pointer, and an optional data pointer.
  */
-int aml_sd_send_cmd(struct mmc *mmc, struct mmc_cmd *cmd, struct	mmc_data *data)
+int aml_sd_send_cmd(struct mmc *mmc, struct mmc_cmd *cmd, struct mmc_data *data)
 {
         int ret = SD_NO_ERROR;
         //u32 vconf;
@@ -370,40 +382,47 @@ int aml_sd_send_cmd(struct mmc *mmc, struct mmc_cmd *cmd, struct	mmc_data *data)
         sd_emmc_reg->gcmd_arg = desc_cur->cmd_arg;
 #endif
     //waiting end of chain
+        //mmc->refix = 0;
         while (1) {
                 status_irq = sd_emmc_reg->gstatus;
-				if (status_irq_reg->end_of_chain)
+                if (status_irq_reg->end_of_chain)
                         break;
         }
         if (status_irq_reg->rxd_err) {
                 ret |= SD_EMMC_RXD_ERROR;
-                printf("emmc/sd read error, cmd%d, status=0x%x\n",
-                    cmd->cmdidx, status_irq);
+                if (!mmc->refix)
+                    printf("emmc/sd read error, cmd%d, status=0x%x\n",
+                        cmd->cmdidx, status_irq);
         }
         if (status_irq_reg->txd_err) {
                 ret |= SD_EMMC_TXD_ERROR;
-                printf("emmc/sd write error, cmd%d, status=0x%x\n",
-                    cmd->cmdidx, status_irq);
+                if (!mmc->refix)
+                    printf("emmc/sd write error, cmd%d, status=0x%x\n",
+                        cmd->cmdidx, status_irq);
         }
         if (status_irq_reg->desc_err) {
                 ret |= SD_EMMC_DESC_ERROR;
-                printf("emmc/sd descripter error, cmd%d, status=0x%x\n",
-                    cmd->cmdidx, status_irq);
+                if (!mmc->refix)
+                    printf("emmc/sd descripter error, cmd%d, status=0x%x\n",
+                        cmd->cmdidx, status_irq);
         }
         if (status_irq_reg->resp_err) {
                 ret |= SD_EMMC_RESP_CRC_ERROR;
-                printf("emmc/sd response crc error, cmd%d, status=0x%x\n",
-                    cmd->cmdidx, status_irq);
+                if (!mmc->refix)
+                    printf("emmc/sd response crc error, cmd%d, status=0x%x\n",
+                        cmd->cmdidx, status_irq);
         }
         if (status_irq_reg->resp_timeout) {
                 ret |= SD_EMMC_RESP_TIMEOUT_ERROR;
-                printf("emmc/sd response timeout, cmd%d, status=0x%x\n",
-                    cmd->cmdidx, status_irq);
+                if (!mmc->refix)
+                    printf("emmc/sd response timeout, cmd%d, status=0x%x\n",
+                        cmd->cmdidx, status_irq);
         }
         if (status_irq_reg->desc_timeout) {
                 ret |= SD_EMMC_DESC_TIMEOUT_ERROR;
-                printf("emmc/sd descripter timeout, cmd%d, status=0x%x\n",
-                    cmd->cmdidx, status_irq);
+                if (!mmc->refix)
+                    printf("emmc/sd descripter timeout, cmd%d, status=0x%x\n",
+                        cmd->cmdidx, status_irq);
         }
         if (data) {
                 if ((data->blocks*data->blocksize <0x200) && (data->flags == MMC_DATA_READ)) {
@@ -467,12 +486,276 @@ int aml_sd_init(struct mmc *mmc)
 		return 1;
 }
 
+#define MAX_CALI_RETRY	(3)
+#define MAX_DELAY_CNT	(16)
+#define CALI_BLK_CNT	(10)
+#define REFIX_BLK_CNT	(100)
+u8 line_x, cal_time;
+u8 dly_tmp;
+u8 max_index;
+
+int aml_send_calibration_blocks(struct mmc *mmc, char *buffer, u32 start_blk, u32 cnt)
+{
+	int err = 0, ret = 0;
+	struct mmc_cmd cmd = {0};
+	struct mmc_cmd stop = {0};
+	struct mmc_data data = {{0}, 0};
+
+	stop.cmdidx = MMC_CMD_STOP_TRANSMISSION;
+	stop.cmdarg = 0;
+	stop.resp_type = MMC_RSP_R1b;
+
+	if (cnt > 1)
+		cmd.cmdidx = MMC_CMD_READ_MULTIPLE_BLOCK;
+	else
+		cmd.cmdidx = MMC_CMD_READ_SINGLE_BLOCK;
+	cmd.cmdarg = start_blk;          //start address = 0
+	cmd.resp_type = MMC_RSP_R1;
+
+	data.dest = buffer;
+	data.blocks = cnt;
+	data.blocksize = mmc->read_bl_len;
+	data.flags = MMC_DATA_READ;
+
+	err = aml_sd_send_cmd(mmc, &cmd, &data);
+	if (err)
+		emmc_debug("%s [%d] send calibration read blocks error %d cnt = %d\n", __func__, __LINE__, err, cnt);
+	if (cnt > 1 || err) {
+		ret = aml_sd_send_cmd(mmc, &stop, NULL);
+		if (ret)
+		emmc_debug("%s [%d] send calibration stop blocks error %d\n", __func__, __LINE__, ret);
+	}
+	if (ret || err)
+		return -1;
+	return 0;
+}
+
+int sd_emmc_test_adj(struct mmc *mmc)
+{
+	int err = 0, ret = 0;
+	struct mmc_cmd cmd = {0};
+	struct mmc_cmd stop = {0};
+	struct mmc_data data = {{0}, 0};
+	char *blk_test = NULL;
+
+	struct aml_card_sd_info *aml_priv = mmc->priv;
+	struct sd_emmc_global_regs *sd_emmc_reg = aml_priv->sd_emmc_reg;
+	u32 adjust = sd_emmc_reg->gadjust;
+	struct sd_emmc_adjust *gadjust = (struct sd_emmc_adjust *)&adjust;
+	u32 vclk, clk_div, retry;
+	struct sd_emmc_clock *clkc = (struct sd_emmc_clock *)&(vclk);
+	vclk = sd_emmc_reg->gclock;
+	clk_div = clkc->div;
+	retry = clk_div;
+
+	blk_test = malloc(0x400 * mmc->read_bl_len);
+	if (!blk_test)
+		return -1;
+
+	stop.cmdidx = MMC_CMD_STOP_TRANSMISSION;
+	stop.cmdarg = 0;
+	stop.resp_type = MMC_RSP_R1b;
+
+	cmd.cmdarg = 0x14000;
+	cmd.cmdidx = MMC_CMD_READ_MULTIPLE_BLOCK;
+	cmd.resp_type = MMC_RSP_R1;
+
+	data.dest = blk_test;
+	data.blocks = 0x400;
+	data.blocksize = mmc->read_bl_len;
+	data.flags = MMC_DATA_READ;
+
+__Retry:
+	err = aml_sd_send_cmd(mmc, &cmd, &data);
+	if (err)
+		emmc_debug("%s [%d] send test read blocks error %d\n", __func__, __LINE__, err);
+	ret = aml_sd_send_cmd(mmc, &stop, NULL);
+	if (ret)
+		emmc_debug("%s [%d] send test stop blocks error %d\n", __func__, __LINE__, ret);
+
+	if (ret || err) {
+		if (retry == 0) {
+			free(blk_test);
+			return 1;
+		}
+		retry--;
+		gadjust->adj_delay--;
+		sd_emmc_reg->gadjust = adjust;
+		printf("adj retry sampling point:(%d)->(%d)",
+			gadjust->adj_delay+1, gadjust->adj_delay);
+		emmc_debug("%s [%d]:  delay = 0x%x   gadjust =0x%x\n",
+			__func__, __LINE__, sd_emmc_reg->gdelay, sd_emmc_reg->gadjust);
+		goto __Retry;
+	}
+	free(blk_test);
+	return 0;
+}
+
+int aml_sd_retry_refix(struct mmc *mmc)
+{
+	struct aml_card_sd_info *aml_priv = mmc->priv;
+	struct sd_emmc_global_regs *sd_emmc_reg = aml_priv->sd_emmc_reg;
+	u32 start_blk = 0;
+	u32 vclk, clk_div;
+	struct sd_emmc_clock *clkc = (struct sd_emmc_clock *)&(vclk);
+	u32 adjust = sd_emmc_reg->gadjust;
+	struct sd_emmc_adjust *gadjust = (struct sd_emmc_adjust *)&adjust;
+	int err = 0, ret = 0, adj_delay = 0;
+	char *blk_test = NULL;
+	emmc_debug("tuning..................\n");
+
+	//const u8 *blk_pattern = tuning_data->blk_pattern;
+	//u8 *blk_test;
+	//unsigned int blksz = tuning_data->blksz;
+	//int ret = 0;
+	int n, nmatch, ntries = 20;
+	int wrap_win_start = -1, wrap_win_size = 0;
+	int best_win_start = -1, best_win_size = -1;
+	int curr_win_start = -1, curr_win_size = 0;
+
+	u8 rx_tuning_result[20] = { 0 };
+
+	blk_test = malloc(REFIX_BLK_CNT * mmc->read_bl_len);
+	if (!blk_test)
+		return -1;
+	vclk = sd_emmc_reg->gclock;
+	clk_div = clkc->div;
+
+	for (adj_delay = 0; adj_delay < clk_div; adj_delay++) {
+		// Perform tuning ntries times per clk_div increment
+		gadjust->adj_delay = adj_delay;
+		gadjust->adj_enable = 1;
+		gadjust->cali_enable = 0;
+		gadjust->cali_rise = 0;
+		sd_emmc_reg->gadjust = adjust;
+		start_blk = 0x14000;
+		emmc_debug("%s [%d]: gadjust =0x%x\n",
+			__func__, __LINE__, sd_emmc_reg->gadjust);
+		for (n = 0, nmatch = 0; n < ntries; n++) {
+
+			memset(blk_test, 0, REFIX_BLK_CNT);
+
+			ret = aml_send_calibration_blocks(mmc, blk_test, 0, 1);
+			err = aml_send_calibration_blocks(mmc, blk_test, start_blk, REFIX_BLK_CNT);
+
+			if (!err && !ret)
+				nmatch++;
+			else {
+				emmc_debug("refix error: adj_delay=%d nmatch=%d err=%d ret=%d\n",adj_delay, nmatch, err, ret);
+				break;
+			}
+		}
+
+		if (adj_delay < sizeof(rx_tuning_result) / sizeof (rx_tuning_result[0]))
+			rx_tuning_result[adj_delay] = nmatch;
+
+		if (nmatch == ntries) {
+			if (adj_delay == 0)
+				wrap_win_start = adj_delay;
+
+			if (wrap_win_start >= 0)
+				wrap_win_size++;
+
+			if (curr_win_start < 0)
+				curr_win_start = adj_delay;
+
+			curr_win_size++;
+		} else {
+			if (curr_win_start >= 0) {
+				if (best_win_start < 0) {
+					best_win_start = curr_win_start;
+					best_win_size = curr_win_size;
+				}
+				else {
+					if (best_win_size < curr_win_size) {
+						best_win_start = curr_win_start;
+						best_win_size = curr_win_size;
+					}
+				}
+
+				wrap_win_start = -1;
+				curr_win_start = -1;
+				curr_win_size = 0;
+			}
+		}
+		emmc_debug("curr_win_start=%d, curr_win_size=%d\n",curr_win_start, curr_win_size);
+		emmc_debug("wrap_win_start=%d, wrap_win_size=%d\n",wrap_win_start, wrap_win_size);
+		emmc_debug("best_win_start=%d, best_win_size=%d\n\n",best_win_start, best_win_size);
+	}
+
+#if 0
+	for (n = 0; n <= clkc->div; n++) {
+		if (n < sizeof(rx_tuning_result) / sizeof (rx_tuning_result[0]))
+			printf("RX[%d]=%d\n", n, rx_tuning_result[n]);
+	}
+#endif
+
+	if (curr_win_start >= 0) {
+		if (best_win_start < 0) {
+			best_win_start = curr_win_start;
+			best_win_size = curr_win_size;
+		} else if (wrap_win_size > 0) {
+			// Wrap around case
+			if (curr_win_size + wrap_win_size > best_win_size) {
+				best_win_start = curr_win_start;
+				best_win_size = curr_win_size + wrap_win_size;
+			}
+		} else if (best_win_size < curr_win_size) {
+			best_win_start = curr_win_start;
+			best_win_size = curr_win_size;
+		}
+
+		curr_win_start = -1;
+		curr_win_size = 0;
+	}
+
+
+	if (best_win_start < 0) {
+		printf("Tuning failed to find a valid window, using default rx phase\n");
+		ret = -1;
+		//writel(vclk2_bak, host->base + SDHC_CLK2);
+	} else {
+		adj_delay = best_win_start + (best_win_size / 2);
+		if (adj_delay > clkc->div)
+			adj_delay -= (clkc->div + 1);
+
+		gadjust->adj_enable = 1;
+		gadjust->cali_enable = 0;
+		gadjust->cali_rise = 0;
+		gadjust->adj_delay = adj_delay;
+		sd_emmc_reg->gadjust = adjust;
+	}
+	emmc_debug("%s [%d]:  delay = 0x%x   gadjust =0x%x\n",
+			__func__, __LINE__, sd_emmc_reg->gdelay, sd_emmc_reg->gadjust);
+	emmc_debug("%s [%d]: adj_delay = %d\n", __func__, __LINE__, adj_delay);
+	free(blk_test);
+
+/* test adj sampling point*/
+	ret = sd_emmc_test_adj(mmc);
+
+	return ret;
+}
+
+int aml_sd_calibration(struct mmc *mmc)
+{
+	struct aml_card_sd_info *aml_priv = mmc->priv;
+	struct sd_emmc_global_regs *sd_emmc_reg = aml_priv->sd_emmc_reg;
+	cpu_id_t cpu_id = get_cpu_id();
+	if (cpu_id.family_id == MESON_CPU_MAJOR_ID_GXBB)
+		sd_emmc_reg->gdelay = 0x85854055;
+	else if (cpu_id.family_id == MESON_CPU_MAJOR_ID_GXTVBB)
+		sd_emmc_reg->gdelay = 0x10101331;
+	return 0;
+}
+
 static const struct mmc_ops aml_sd_emmc_ops = {
 	.send_cmd	= aml_sd_send_cmd,
 	.set_ios	= aml_sd_cfg_swth,
 	.init		= aml_sd_init,
 //	.getcd		= ,
 //	.getwp		= ,
+	.calibration = aml_sd_calibration,
+	.refix = aml_sd_retry_refix,
 };
 
 void sd_emmc_register(struct aml_card_sd_info * aml_priv)
@@ -495,11 +778,8 @@ void sd_emmc_register(struct aml_card_sd_info * aml_priv)
 			     MMC_MODE_HC;
 #endif
 	cfg->f_min = 400000;
-#if CONFIG_EMMC_DDR52_EN
-	cfg->f_max = CONFIG_EMMC_DDR52_CLK;
-#else
-	cfg->f_max = 50000000;
-#endif
+	cfg->f_max = 40000000;
+
 	cfg->b_max = 256;
 	mmc_create(cfg,aml_priv);
 }

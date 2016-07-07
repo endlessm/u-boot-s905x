@@ -18,6 +18,7 @@
 */
 #include <common.h>
 #include <asm/arch/io.h>
+#include <asm/cpu_id.h>
 #include "cvbs_regs.h"
 #include "cvbs_config.h"
 
@@ -32,7 +33,7 @@ enum CVBS_MODE_e
 
 unsigned int cvbs_mode = VMODE_MAX;
 
-
+static cpu_id_t cpu_id;
 /*----------------------------------------------------------------------------*/
 // interface for registers of soc
 
@@ -136,6 +137,40 @@ static int cvbs_get_vcbus_bits(unsigned int addr_offset, unsigned int start, uns
 #endif
 
 /*----------------------------------------------------------------------------*/
+// interface for cpu id checking
+
+static int check_cpu_type(unsigned int cpu_type)
+{
+	return (cvbs_read_cbus(ASSIST_HW_REV)==cpu_type);
+}
+
+static bool inline is_meson_gxl_cpu(void)
+{
+	return (cpu_id.family_id == MESON_CPU_MAJOR_ID_GXL)?
+		1:0;
+}
+
+static bool inline is_meson_gxm_cpu(void)
+{
+	return (cpu_id.family_id == MESON_CPU_MAJOR_ID_GXM)?
+		1:0;
+
+}
+static bool inline is_meson_gxl_package_905X(void)
+{
+	return ((cpu_id.family_id == MESON_CPU_MAJOR_ID_GXL) &&
+		(cpu_id.package_id == MESON_CPU_PACKAGE_ID_905X))?
+		1:0;
+}
+
+static bool inline is_meson_gxl_package_905L(void)
+{
+	return ((cpu_id.family_id == MESON_CPU_MAJOR_ID_GXL) &&
+		(cpu_id.package_id == MESON_CPU_PACKAGE_ID_905L))?
+		1:0;
+}
+
+/*----------------------------------------------------------------------------*/
 // configuration for enci bist
 int cvbs_set_bist(char* bist_mode)
 {
@@ -183,7 +218,10 @@ int cvbs_set_vdac(int status)
 		break;
 	case 1:// from enci to vdac
 		cvbs_set_vcbus_bits(VENC_VDAC_DACSEL0, 5, 1, 0);
-		cvbs_write_hiu(HHI_VDAC_CNTL0, 1);
+		if (is_meson_gxl_cpu() || is_meson_gxm_cpu())
+			cvbs_write_hiu(HHI_VDAC_CNTL0, 0xf0001);
+		else
+			cvbs_write_hiu(HHI_VDAC_CNTL0, 1);
 		cvbs_write_hiu(HHI_VDAC_CNTL1, 0);
 		break;
 	case 2:// from atv to vdac
@@ -400,18 +438,14 @@ static void cvbs_config_hdmipll_gxtvbb(void)
 	return;
 }
 
-static int check_cpu_type(unsigned int cpu_type)
-{
-	return (cvbs_read_cbus(ASSIST_HW_REV)==cpu_type);
-}
-
 static int cvbs_config_clock(void)
 {
 	if (check_cpu_type(MESON_CPU_MAJOR_ID_GXBB))
 		cvbs_config_hdmipll_gxb();
 	else if (check_cpu_type(MESON_CPU_MAJOR_ID_GXTVBB))
 		cvbs_config_hdmipll_gxtvbb();
-	else if (check_cpu_type(MESON_CPU_MAJOR_ID_GXL))
+	else if (check_cpu_type(MESON_CPU_MAJOR_ID_GXL) ||
+		is_meson_gxm_cpu())
 		cvbs_config_hdmipll_gxl();
 
 	cvbs_set_hiu_bits(HHI_VIID_CLK_CNTL, 0, VCLK2_EN, 1);
@@ -524,6 +558,19 @@ static void cvbs_performance_enhancement(int mode)
 		index = (index >= max) ? 0 : index;
 		s = tvregs_576cvbs_performance_gxtvbb[index];
 		type = 5;
+	} else if (is_meson_gxl_package_905X() ||
+		is_meson_gxm_cpu()) {
+		max = sizeof(tvregs_576cvbs_performance_905x)
+			/ sizeof(struct reg_s *);
+		index = (index >= max) ? 0 : index;
+		s = tvregs_576cvbs_performance_905x[index];
+		type = 6;
+	} else if (is_meson_gxl_package_905L()) {
+		max = sizeof(tvregs_576cvbs_performance_905l)
+			/ sizeof(struct reg_s *);
+		index = (index >= max) ? 0 : index;
+		s = tvregs_576cvbs_performance_905l[index];
+		type = 7;
 	}
 
 	printf("cvbs performance type = %d, table = %d\n", type, index);
@@ -581,6 +628,8 @@ void cvbs_show_valid_vmode(void)
 
 void cvbs_init(void)
 {
+	cpu_id = get_cpu_id();
+
 #ifdef CONFIG_CVBS_PERFORMANCE_COMPATIBILITY_SUPPORT
 	cvbs_performance_config();
 #endif

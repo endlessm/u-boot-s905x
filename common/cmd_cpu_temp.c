@@ -33,7 +33,7 @@
 int temp_base = 27;
 #define NUM 30
 
-int get_tsc(int temp)
+static int get_tsc(int temp)
 {
 	int vmeasure, TS_C;
 	switch (get_cpu_id().family_id) {
@@ -45,6 +45,7 @@ int get_tsc(int temp)
 		TS_C = ((vmeasure)/8.25)+16;
 		break;
 	case MESON_CPU_MAJOR_ID_GXL:
+	case MESON_CPU_MAJOR_ID_GXM:
 		/*TS_C = 16-(adc-1778)/41*/
 		vmeasure = temp-(1778+(temp_base-27)*17);
 		printf("vmeasure=%d\n", vmeasure);
@@ -63,7 +64,7 @@ int get_tsc(int temp)
 	return TS_C;
 }
 
-int adc_init_chan6(void)
+static int adc_init_chan6(void)
 {
 	/*adc reg3 bit28: config adc registers flag*/
 	if (readl(SAR_ADC_REG3)&(0x1<<28))
@@ -84,6 +85,7 @@ int adc_init_chan6(void)
 		writel(readl(0xc110868c)|(0x1<<28), SAR_ADC_REG3);
 		break;
 	case MESON_CPU_MAJOR_ID_GXL:
+	case MESON_CPU_MAJOR_ID_GXM:
 		writel(0x002c2060, SAR_ADC_REG11);/*bit20 disabled*/
 		writel(0x00000006, SAR_ADC_CHAN_LIST);/*channel 6*/
 		writel(0x00003000, SAR_ADC_AVG_CNTL);
@@ -102,26 +104,72 @@ int adc_init_chan6(void)
 	return 0;
 }
 
-int get_adc_sample(int chan)
+static int get_adc_sample(int chan)
 {
 	unsigned value;
+	int count = 0;
 
-	/*adc reg3 bit29: read adc sample value flag*/
-	while (readl(SAR_ADC_REG3)&(1<<29))
-		udelay(10000);
-	writel(readl(SAR_ADC_REG3)|(1 < 29), SAR_ADC_REG3);
+	if (!(readl(SAR_CLK_CNTL)&(1<<8)))/*check and open clk*/
+		writel(readl(SAR_CLK_CNTL)|(1<<8), SAR_CLK_CNTL);
+	if (!(readl(SAR_BUS_CLK_EN)&(1<<EN_BIT)))/*check and open clk*/
+		writel(readl(SAR_BUS_CLK_EN)|(1<<EN_BIT), HHI_GCLK_MPEG2);
 
-	writel(0x84064040, SAR_ADC_REG0);
-	writel(0x84064041, SAR_ADC_REG0);
-	writel(0x84064045, SAR_ADC_REG0);
+	/*adc reg4 bit14~15: read adc sample value flag*/
+	/*0x21a4: bit14: kernel  bit15: bl30*/
+	for (; count <= 100; count++) {
+		if (count == 100) {
+			printf("%s: get flag timeout!\n",__func__);
+			return -1;
+		}
+
+		if (!((readl(SAR_ADC_DELAY)>>14)&3)) {
+			writel(readl(SAR_ADC_DELAY)|(FLAG_BUSY_BL30),
+				   SAR_ADC_DELAY);
+			if (((readl(SAR_ADC_DELAY)>>14)&3) != 0x2)
+				/*maybe kernel set flag, try again*/
+				writel(readl(SAR_ADC_DELAY)&(~(FLAG_BUSY_BL30)),
+				SAR_ADC_DELAY);
+			else
+				break;/*set bl30 read flag ok*/
+		} else{/*kernel set flag, clear bl30 flag and wait*/
+			writel(readl(SAR_ADC_DELAY)&(~(FLAG_BUSY_BL30)),
+				SAR_ADC_DELAY);
+			udelay(20);
+		}
+	}
+
+	writel(0x00000006, SAR_ADC_CHAN_LIST);/*channel 6*/
+	writel(0xc000c|(0x6<<23)|(0x6<<7), SAR_ADC_DETECT_IDLE_SW);/*channel 6*/
+
+	writel((readl(SAR_ADC_REG0)&(~(1<<0))), SAR_ADC_REG0);
+	writel((readl(SAR_ADC_REG0)|(1<<0)), SAR_ADC_REG0);
+	writel((readl(SAR_ADC_REG0)|(1<<2)), SAR_ADC_REG0);/*start sample*/
+
+	count = 0;
+	do {
+		udelay(20);
+		count++;
+	} while ((readl(SAR_ADC_REG0) & (0x7<<28))
+		&& (count < 100));/*finish sample?*/
+	if (count == 100) {
+		writel(readl(SAR_ADC_REG3)&(~(1 << 29)), SAR_ADC_REG3);
+		printf("%s: wait finish sample timeout!\n",__func__);
+		return -1;
+	}
 
 	value = readl(SAR_ADC_FIFO_RD);
-	writel(readl(SAR_ADC_REG3)&(~(1 < 29)), SAR_ADC_REG3);
-	value = value&SAMPLE_BIT_MASK;
-
+	writel(readl(SAR_ADC_DELAY)&(~(FLAG_BUSY_BL30)), SAR_ADC_DELAY);
+	if (((value>>12) & 0x7) == 0x6)
+		value = value&SAMPLE_BIT_MASK;
+	else{
+		value = -1;
+		printf("%s:sample value err! ch:%d, flag:%d\n", __func__,
+			((value>>12) & 0x7), ((readl(SAR_ADC_DELAY)>>14)&3));
+	}
 	return value;
 }
-unsigned int get_cpu_temp(int tsc, int flag)
+
+static unsigned int get_cpu_temp(int tsc, int flag)
 {
 	unsigned value;
 	if (flag) {
@@ -159,7 +207,7 @@ void quicksort(int a[], int numsize)
 }
 }
 
-int do_read_calib_data(int *flag, int *temp, int *TS_C)
+static unsigned do_read_calib_data(int *flag, int *temp, int *TS_C)
 {
 	char buf[2];
 	unsigned ret;
@@ -190,7 +238,7 @@ int do_read_calib_data(int *flag, int *temp, int *TS_C)
 		&&(0x40 == (int)flagbuf))/*ver2*/
 		*TS_C = 16;
 
-	if (get_cpu_id().family_id == MESON_CPU_MAJOR_ID_GXL)
+	if (get_cpu_id().family_id >= MESON_CPU_MAJOR_ID_GXL)
 		*temp = (*temp)<<2; /*adc 12bit sample*/
 	printf("adc=%d,TS_C=%d,flag=%d\n", *temp, *TS_C, *flag);
 	return ret;
@@ -209,12 +257,14 @@ static int do_write_trim(cmd_tbl_t *cmdtp, int flag1,
 
 	memset(temp1, 0, NUM);
 
-	adc_init_chan6();
+	ret = adc_init_chan6();
+	if (ret)
+		goto err;
 
 	ret = do_read_calib_data(&flag, &temp, &TS_C);
 	if (ret) {
 		printf("chip has trimed!!!\n");
-		return 0;
+		return -1;
 	} else {
 		printf("chip is not triming! triming now......\n");
 		flag = 0;
@@ -244,8 +294,10 @@ static int do_write_trim(cmd_tbl_t *cmdtp, int flag1,
 
 /**********************************/
 	TS_C = get_tsc(temp);
-	if (TS_C < 0)
-		return -1;
+	if ((TS_C == 31) || (TS_C <= 0)) {
+		printf("TS_C: %d NO Trim! Bad chip!Please check!!!\n", TS_C);
+		goto err;
+	}
 /**********************************/
 	temp = 0;
 	memset(temp1, 0, NUM);
@@ -271,9 +323,13 @@ static int do_write_trim(cmd_tbl_t *cmdtp, int flag1,
 		temp = temp - 3.4*(temp_base - 27);
 		break;
 	case MESON_CPU_MAJOR_ID_GXL:/*12bit*/
+	case MESON_CPU_MAJOR_ID_GXM:
 		temp = temp - 17*(temp_base - 27);
 		temp = temp>>2;/*efuse only 10bit adc*/
 		break;
+	default:
+		printf("cpu family id not support!!!\n");
+		goto err;
 	}
 /**********************************/
 	temp = ((temp<<5)|(TS_C&0x1f))&0xffff;
@@ -285,7 +341,10 @@ static int do_write_trim(cmd_tbl_t *cmdtp, int flag1,
 	data = buf[1]<<8 | buf[0];
 	ret = thermal_calibration(0, data);
 	return ret;
+err:
+	return -1;
 }
+
 static int do_read_temp(cmd_tbl_t *cmdtp, int flag1,
 	int argc, char * const argv[])
 {
@@ -317,6 +376,7 @@ static int do_read_temp(cmd_tbl_t *cmdtp, int flag1,
 				tempa = (10*(adc-temp))/34+27;
 				break;
 			case MESON_CPU_MAJOR_ID_GXL:
+			case MESON_CPU_MAJOR_ID_GXM:
 				tempa = (10*(adc-temp))/171+27;
 				break;
 			}
@@ -365,14 +425,22 @@ static int do_set_trim_base(cmd_tbl_t *cmdtp, int flag1,
 static int do_temp_triming(cmd_tbl_t *cmdtp, int flag1,
 	int argc, char * const argv[])
 {
+	int cmd_result;
 	int temp = simple_strtoul(argv[1], NULL, 10);
 	temp_base = temp;
 	printf("set base temperature: %d\n", temp_base);
-	run_command("write_trim", 0);
-	/*FB calibration v5: 1010 0000*/
-	/*manual calibration v2: 0100 0000*/
-	printf("manual calibration v3: 1100 0000\n");
-	run_command("write_version 0xc0", 0);
+
+	cmd_result = run_command("write_trim", 0);
+	if (cmd_result == CMD_RET_SUCCESS) {
+		/*FB calibration v5: 1010 0000*/
+		/*manual calibration v2: 0100 0000*/
+		printf("manual calibration v3: 1100 0000\n");
+		cmd_result = run_command("write_version 0xc0", 0);
+		if (cmd_result != CMD_RET_SUCCESS)
+			printf("write version error!!!\n");
+	} else {
+		printf("trim FAIL!!!Please check!!!\n");
+	}
 	run_command("read_temp", 0);
 	return 0;
 }

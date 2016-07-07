@@ -1,6 +1,6 @@
 
 /*
- * include/configs/gxb_p201_v1.h
+ * board/amlogic/configs/gxm_q200_v1.h
  *
  * Copyright (C) 2015 Amlogic, Inc. All rights reserved.
  *
@@ -19,8 +19,8 @@
  * 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 */
 
-#ifndef __GXB_P201_V1_H__
-#define __GXB_P201_V1_H__
+#ifndef __GXM_Q200_V1_H__
+#define __GXM_Q200_V1_H__
 
 #ifndef __SUSPEND_FIRMWARE__
 #include <asm/arch/cpu.h>
@@ -37,7 +37,8 @@
  * platform power init config
  */
 #define CONFIG_PLATFORM_POWER_INIT
-#define CONFIG_VCCK_INIT_VOLTAGE	1100
+#define CONFIG_VCCKA_INIT_VOLTAGE	1120		// cluster_0 Big cpu
+#define CONFIG_VCCKB_INIT_VOLTAGE	1050		// cluster_1 Little cpu
 #define CONFIG_VDDEE_INIT_VOLTAGE	1000		// voltage for power up
 #define CONFIG_VDDEE_SLEEP_VOLTAGE	 850		// voltage for suspend
 
@@ -46,6 +47,8 @@
 #define CONFIG_CEC_WAKEUP
 
 #define CONFIG_INSTABOOT
+
+#define CONFIG_CMD_SARADC 1
 
 /* SMP Definitinos */
 #define CPU_RELEASE_ADDR		secondary_boot_func
@@ -67,7 +70,6 @@
 #define CONFIG_IR_REMOTE_POWER_UP_KEY_VAL4 0xBA45BD02
 
 #define CONFIG_IR_REMOTE_POWER_UP_KEY_VAL5 0x3ac5bd02
-
 /* args/envs */
 #define CONFIG_SYS_MAXARGS  64
 #define CONFIG_EXTRA_ENV_SETTINGS \
@@ -96,11 +98,12 @@
         "sdc_burning=sdc_burn ${sdcburncfg}\0"\
         "wipe_data=successful\0"\
         "wipe_cache=successful\0"\
+        "EnableSelinux=enforcing\0"\
         "recovery_part=recovery\0"\
         "recovery_offset=0\0"\
         "cvbs_drv=0\0"\
         "initargs="\
-            "rootfstype=ramfs init=/init console=ttyS0,115200 no_console_suspend earlyprintk=aml-uart,0xc81004c0 ramoops.pstore_en=1 ramoops.record_size=0x8000 ramoops.console_size=0x4000 androidboot.selinux=enforcing"\
+            "rootfstype=ramfs init=/init console=ttyS0,115200 no_console_suspend earlyprintk=aml-uart,0xc81004c0 ramoops.pstore_en=1 ramoops.record_size=0x8000 ramoops.console_size=0x4000 "\
             "\0"\
         "upgrade_check="\
             "echo upgrade_step=${upgrade_step}; "\
@@ -109,7 +112,7 @@
             "else fi;"\
             "\0"\
     "storeargs="\
-            "setenv bootargs ${initargs} logo=${display_layer},loaded,${fb_addr},${outputmode} vout=${outputmode},enable hdmimode=${hdmimode} cvbsmode=${cvbsmode} hdmitx=${cecconfig} cvbsdrv=${cvbs_drv} androidboot.firstboot=${firstboot} jtag=${jtag}; "\
+            "setenv bootargs ${initargs} androidboot.selinux=${EnableSelinux} logo=${display_layer},loaded,${fb_addr},${outputmode} maxcpus=${maxcpus} vout=${outputmode},enable hdmimode=${hdmimode} cvbsmode=${cvbsmode} hdmitx=${cecconfig} cvbsdrv=${cvbs_drv} androidboot.firstboot=${firstboot} jtag=${jtag}; "\
 	"setenv bootargs ${bootargs} androidboot.hardware=amlogic;"\
             "run cmdline_keys;"\
             "\0"\
@@ -120,7 +123,7 @@
             "else if test ${reboot_mode} = update; then "\
                     "run update;"\
             "else if test ${reboot_mode} = cold_boot; then "\
-                "run try_auto_burn; "\
+                /*"run try_auto_burn; "*/\
             "fi;fi;fi;"\
             "\0" \
         "storeboot="\
@@ -162,6 +165,7 @@
             "run recovery_from_flash;"\
             "\0"\
         "recovery_from_sdcard="\
+            "setenv bootargs ${bootargs} aml_dt=${aml_dt} recovery_part={recovery_part} recovery_offset={recovery_offset};"\
             "if fatload mmc 0 ${loadaddr} aml_autoscript; then autoscr ${loadaddr}; fi;"\
             "if fatload mmc 0 ${loadaddr} recovery.img; then "\
                     "if fatload mmc 0 ${dtb_mem_addr} dtb.img; then echo sd dtb.img loaded; fi;"\
@@ -169,6 +173,7 @@
                     "bootm ${loadaddr};fi;"\
             "\0"\
         "recovery_from_udisk="\
+            "setenv bootargs ${bootargs} aml_dt=${aml_dt} recovery_part={recovery_part} recovery_offset={recovery_offset};"\
             "if fatload usb 0 ${loadaddr} aml_autoscript; then autoscr ${loadaddr}; fi;"\
             "if fatload usb 0 ${loadaddr} recovery.img; then "\
                 "if fatload usb 0 ${dtb_mem_addr} dtb.img; then echo udisk dtb.img loaded; fi;"\
@@ -196,8 +201,9 @@
             "fi;"\
             "\0"\
         "upgrade_key="\
-            "if gpio input GPIOAO_3; then "\
-                "echo detect upgrade key; sleep 5; run update;"\
+            "if gpio input GPIOAO_2; then "\
+                "echo detect upgrade key; sleep 3;"\
+                "if gpio input GPIOAO_2; then run update; fi;"\
             "fi;"\
             "\0"\
 
@@ -207,6 +213,7 @@
             "run init_display;"\
             "run storeargs;"\
             "run upgrade_key;" \
+            "forceupdate;" \
             "run switch_bootmode;"
 #define CONFIG_BOOTCOMMAND "run storeboot"
 
@@ -219,28 +226,33 @@
 #define CONFIG_SYS_BOOTM_LEN (64<<20) /* Increase max gunzip size*/
 
 /* cpu */
-#define CONFIG_CPU_CLK					1536 //MHz. Range: 600-1800, should be multiple of 24
+#define CONFIG_CPU_CLK					1200 //MHz. Range: 600-1800, should be multiple of 24
 
 /* ddr */
-#define CONFIG_DDR_SIZE					1024 //MB
+#define CONFIG_DDR_SIZE					0 //MB //0 means ddr size auto-detect
 #define CONFIG_DDR_CLK					912  //MHz, Range: 384-1200, should be multiple of 24
-#define CONFIG_DDR_TYPE					CONFIG_DDR_TYPE_DDR3
+#define CONFIG_DDR4_CLK					1100  //MHz, for boards which use different ddr chip
+/* DDR type setting
+ *    CONFIG_DDR_TYPE_LPDDR3   : LPDDR3
+ *    CONFIG_DDR_TYPE_DDR3     : DDR3
+ *    CONFIG_DDR_TYPE_DDR4     : DDR4
+ *    CONFIG_DDR_TYPE_AUTO     : DDR3/DDR4 auto detect */
+#define CONFIG_DDR_TYPE					CONFIG_DDR_TYPE_AUTO
 /* DDR channel setting, please refer hardware design.
- *    CONFIG_DDR0_RANK0_ONLY   : one channel
- *    CONFIG_DDR0_RANK01_SAME  : one channel use two rank with same setting
- *    CONFIG_DDR0_RANK01_DIFF  : one channel use two rank with diff setting
- *    CONFIG_DDR01_SHARE_AC    : two channels  */
-#define CONFIG_DDR_CHANNEL_SET			CONFIG_DDR0_RANK01_SAME
+ *    CONFIG_DDR0_RANK0        : DDR0 rank0
+ *    CONFIG_DDR0_RANK01       : DDR0 rank0+1
+ *    CONFIG_DDR0_16BIT        : DDR0 16bit mode
+ *    CONFIG_DDR_CHL_AUTO      : auto detect RANK0 / RANK0+1 */
+#define CONFIG_DDR_CHANNEL_SET			CONFIG_DDR0_RANK01
 #define CONFIG_DDR_FULL_TEST			0 //1 for ddr full test
 #define CONFIG_NR_DRAM_BANKS			1
-/* ddr power saving */
-#define CONFIG_DDR_ZQ_POWER_DOWN
-#define CONFIG_DDR_POWER_DOWN_PHY_VREF
-/* ddr detection */
-#define CONFIG_DDR_SIZE_AUTO_DETECT		0 //0:disable, 1:enable
 /* ddr functions */
 #define CONFIG_CMD_DDR_D2PLL			0 //0:disable, 1:enable. d2pll cmd
 #define CONFIG_CMD_DDR_TEST				0 //0:disable, 1:enable. ddrtest cmd
+#define CONFIG_DDR_LOW_POWER			0 //0:disable, 1:enable. ddr clk gate for lp
+#define CONFIG_DDR_ZQ_PD				0 //0:disable, 1:enable. ddr zq power down
+#define CONFIG_DDR_USE_EXT_VREF			0 //0:disable, 1:enable. ddr use external vref
+#define CONFIG_DDR4_TIMING_TEST			0 //0:disable, 1:enable. ddr4 timing test function
 
 /* storage: emmc/nand/sd */
 #define	CONFIG_STORE_COMPATIBLE 1
@@ -290,11 +302,12 @@
 /* #define CONFIG_MUSB_UDC		1 */
 #define CONFIG_CMD_USB 1
 #if defined(CONFIG_CMD_USB)
-	#define CONFIG_M8_USBPORT_BASE_A	0xC9000000
-	#define CONFIG_M8_USBPORT_BASE_B	0xC9100000
+	#define CONFIG_GXL_XHCI_BASE		0xc9000000
+	#define CONFIG_GXL_USB_PHY2_BASE	0xd0078000
+	#define CONFIG_GXL_USB_PHY3_BASE	0xd0078080
 	#define CONFIG_USB_STORAGE      1
-	#define CONFIG_USB_DWC_OTG_HCD  1
-	#define CONFIG_USB_DWC_OTG_294	1
+	#define CONFIG_USB_XHCI		1
+	#define CONFIG_USB_XHCI_AMLOGIC_GXL 1
 #endif //#if defined(CONFIG_CMD_USB)
 
 //UBOOT Facotry usb/sdcard burning config
@@ -366,12 +379,19 @@
 #define CONFIG_CMD_CPU_TEMP 1
 #define CONFIG_SYS_MEM_TOP_HIDE 0x08000000 //hide 128MB for kernel reserve
 
+/* debug mode defines */
+//#define CONFIG_DEBUG_MODE           1
+#ifdef CONFIG_DEBUG_MODE
+#define CONFIG_DDR_CLK_DEBUG        636
+#define CONFIG_CPU_CLK_DEBUG        600
+#endif
+
 //support secure boot
 #define CONFIG_AML_SECURE_UBOOT   1
 
 #if defined(CONFIG_AML_SECURE_UBOOT)
 
-//for GXBB SRAM size limitation just disable NAND
+//for SRAM size limitation just disable NAND
 //as the socket board default has no NAND
 //#undef CONFIG_AML_NAND
 
@@ -379,7 +399,7 @@
 #define CONFIG_AML_CRYPTO_UBOOT   1
 
 //unify build for generate encrypted kernel image
-//SRC : "board/amlogic/gxb_skt_v1/boot.img"
+//SRC : "board/amlogic/(board)/boot.img"
 //DST : "fip/boot.img.encrypt"
 //#define CONFIG_AML_CRYPTO_IMG       1
 
@@ -397,6 +417,7 @@
   #undef CONFIG_AML_CUSTOMER_ID
   #define CONFIG_AML_CUSTOMER_ID  CONFIG_CUSTOMER_ID
 #endif
+#define ETHERNET_INTERNAL_PHY
 
 #endif
 

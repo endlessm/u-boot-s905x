@@ -19,9 +19,6 @@
  * 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 */
 
-#include <asm/arch/secure_apb.h>
-#include <asm/arch/io.h>
-
 #define MESON_CPU_MAJOR_ID_M6		0x16
 #define MESON_CPU_MAJOR_ID_M6TV		0x17
 #define MESON_CPU_MAJOR_ID_M6TVL	0x18
@@ -33,8 +30,13 @@
 #define MESON_CPU_MAJOR_ID_GXBB		0x1F
 #define MESON_CPU_MAJOR_ID_GXTVBB	0x20
 #define MESON_CPU_MAJOR_ID_GXL		0x21
+#define MESON_CPU_MAJOR_ID_GXM		0x22
 
+#define MESON_CPU_PACKAGE_ID_905D	0X00
 #define MESON_CPU_PACKAGE_ID_905M	0x20
+#define MESON_CPU_PACKAGE_ID_905X	0X80
+#define MESON_CPU_PACKAGE_ID_905L	0XC0
+#define MESON_CPU_PACKAGE_ID_905M2	0XE0
 
 #define MESON_CPU_CHIP_REVISION_A	0xA
 #define MESON_CPU_CHIP_REVISION_B	0xB

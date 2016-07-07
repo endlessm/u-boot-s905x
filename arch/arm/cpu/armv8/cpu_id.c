@@ -20,12 +20,14 @@
 */
 
 #include <asm/cpu_id.h>
+#include <asm/arch/secure_apb.h>
+#include <asm/arch/io.h>
 
 cpu_id_t get_cpu_id(void) {
 	cpu_id_t cpu_id;
 	unsigned int cpu_id_reg = readl(P_AO_SEC_SD_CFG8);
 	cpu_id.family_id = (cpu_id_reg >> 24) & (0XFF);
-	cpu_id.package_id = (cpu_id_reg >> 16) & (0XFF);
+	cpu_id.package_id = (cpu_id_reg >> 16) & (0XF0);
 	cpu_id.chip_rev = (cpu_id_reg >> 8) & (0XFF);
 	cpu_id.layout_ver = (cpu_id_reg) & (0XF);
 	return cpu_id;

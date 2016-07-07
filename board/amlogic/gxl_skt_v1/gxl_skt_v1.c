@@ -32,6 +32,7 @@
 #ifdef CONFIG_AML_VPU
 #include <vpu.h>
 #endif
+#include <vpp.h>
 #ifdef CONFIG_AML_V2_FACTORY_BURN
 #include <amlogic/aml_v2_burning.h>
 #endif// #ifdef CONFIG_AML_V2_FACTORY_BURN
@@ -326,12 +327,17 @@ int board_early_init_f(void){
 #ifdef CONFIG_USB_XHCI_AMLOGIC_GXL
 #include <asm/arch/usb-new.h>
 #include <asm/arch/gpio.h>
+#define CONFIG_GXL_USB_U2_PORT_NUM	2
+#define CONFIG_GXL_USB_U3_PORT_NUM	0
+
 struct amlogic_usb_config g_usb_config_GXL_skt={
 	CONFIG_GXL_XHCI_BASE,
 	USB_ID_MODE_HARDWARE,
 	NULL,//gpio_set_vbus_power, //set_vbus_power
 	CONFIG_GXL_USB_PHY2_BASE,
 	CONFIG_GXL_USB_PHY3_BASE,
+	CONFIG_GXL_USB_U2_PORT_NUM,
+	CONFIG_GXL_USB_U3_PORT_NUM,
 };
 #endif /*CONFIG_USB_XHCI_AMLOGIC*/
 
@@ -353,6 +359,7 @@ int board_init(void)
 #ifdef CONFIG_AML_VPU
 	vpu_probe();
 #endif
+	vpp_init();
 #ifdef CONFIG_AML_HDMITX20
 	hdmi_tx_set_hdmi_5v();
 	hdmi_tx_init();

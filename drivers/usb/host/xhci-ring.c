@@ -464,7 +464,8 @@ union xhci_trb *xhci_wait_for_event(struct xhci_ctrl *ctrl, trb_type expected)
 		return NULL;
 
 	printf("XHCI timeout on event type %d... cannot recover.\n", expected);
-	BUG();
+	return NULL;
+	/*BUG();*/
 }
 
 /*
@@ -493,19 +494,22 @@ static void abort_td(struct usb_device *udev, int ep_index)
 	xhci_acknowledge_event(ctrl);
 
 	event = xhci_wait_for_event(ctrl, TRB_COMPLETION);
-	BUG_ON(TRB_TO_SLOT_ID(le32_to_cpu(event->event_cmd.flags))
-		!= udev->slot_id || GET_COMP_CODE(le32_to_cpu(
-		event->event_cmd.status)) != COMP_SUCCESS);
+	if (event)
+		BUG_ON(TRB_TO_SLOT_ID(le32_to_cpu(event->event_cmd.flags))
+			!= udev->slot_id || GET_COMP_CODE(le32_to_cpu(
+			event->event_cmd.status)) != COMP_SUCCESS);
 	xhci_acknowledge_event(ctrl);
 
 	xhci_queue_command(ctrl, (void *)((uintptr_t)ring->enqueue |
 		ring->cycle_state), udev->slot_id, ep_index, TRB_SET_DEQ);
 	event = xhci_wait_for_event(ctrl, TRB_COMPLETION);
-	BUG_ON(TRB_TO_SLOT_ID(le32_to_cpu(event->event_cmd.flags))
-		!= udev->slot_id || GET_COMP_CODE(le32_to_cpu(
-		event->event_cmd.status)) != COMP_SUCCESS);
+	if (event)
+		BUG_ON(TRB_TO_SLOT_ID(le32_to_cpu(event->event_cmd.flags))
+			!= udev->slot_id || GET_COMP_CODE(le32_to_cpu(
+			event->event_cmd.status)) != COMP_SUCCESS);
 	xhci_acknowledge_event(ctrl);
 }
+
 
 static void record_transfer_result(struct usb_device *udev,
 				   union xhci_trb *event, int length)

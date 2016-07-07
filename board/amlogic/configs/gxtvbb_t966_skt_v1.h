@@ -1,6 +1,6 @@
 
 /*
- * include/configs/gxtvbb_p311_v1.h
+ * board/amlogic/configs/gxtvbb_t966_skt_v1.h
  *
  * Copyright (C) 2015 Amlogic, Inc. All rights reserved.
  *
@@ -19,8 +19,9 @@
  * 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 */
 
-#ifndef __GXTVBB_P311_V1_H__
-#define __GXTVBB_P311_V1_H__
+#ifndef __GXTVBB_T966_SKT_V1_H__
+#define __GXTVBB_T966_SKT_V1_H__
+
 
 #include <asm/arch/cpu.h>
 
@@ -39,7 +40,7 @@
 
 /* configs for CEC */
 #define CONFIG_CEC_OSD_NAME		"Mbox"
-//#define CONFIG_CEC_WAKEUP
+#define CONFIG_CEC_WAKEUP
 
 #define CONFIG_INSTABOOT
 
@@ -98,13 +99,21 @@
 		"echo upgrade_step=${upgrade_step}; "\
 		"if itest ${upgrade_step} == 3; then "\
 			"run init_display; run storeargs; run update; "\
-		"else fi; "\
+		"else if itest ${upgrade_step} == 1; then "\
+			"defenv_reserv; setenv upgrade_step 2; saveenv; "\
+		"fi; fi; "\
 		"\0"\
+	"bootmode_check="\
+		"get_rebootmode; echo reboot_mode=${reboot_mode}; "\
+		"if test ${reboot_mode} = factory_reset; then "\
+			"defenv_reserv aml_dt;setenv upgrade_step 2;save; "\
+		"fi; "\
+		"\0" \
 	"storeargs="\
 		"setenv bootargs rootfstype=ramfs init=/init "\
 		"console=ttyS0,115200 no_console_suspend "\
 		"earlyprintk=aml-uart,0xc81004c0 "\
-		"androidboot.selinux=enforcing "\
+		"androidboot.selinux=disabled "\
 		"logo=${display_layer},loaded,${fb_addr} "\
 		"vout=${outputmode},enable "\
 		"osd_reverse=${osd_reverse} video_reverse=${video_reverse} "\
@@ -163,6 +172,7 @@
 		"run recovery_from_flash; "\
 		"\0"\
 	"recovery_from_sdcard="\
+	      "setenv bootargs ${bootargs} aml_dt=${aml_dt};"\
 		"if fatload mmc 0 ${loadaddr} aml_autoscript; then "\
 			"autoscr ${loadaddr}; "\
 		"fi; "\
@@ -170,11 +180,11 @@
 			"if fatload mmc 0 ${dtb_mem_addr} dtb.img; then "\
 				"echo sd dtb.img loaded; "\
 			"fi; "\
-			"wipeisb; "\
 			"bootm ${loadaddr}; "\
 		"fi; "\
 		"\0"\
 	"recovery_from_udisk="\
+	      "setenv bootargs ${bootargs} aml_dt=${aml_dt};"\
 		"if fatload usb 0 ${loadaddr} aml_autoscript; then "\
 			"autoscr ${loadaddr}; "\
 		"fi; "\
@@ -182,14 +192,12 @@
 			"if fatload usb 0 ${dtb_mem_addr} dtb.img; then "\
 				"echo udisk dtb.img loaded; "\
 			"fi; "\
-			"wipeisb; "\
 			"bootm ${loadaddr}; "\
 		"fi; "\
 		"\0"\
 	"recovery_from_flash="\
                 "setenv bootargs ${bootargs} aml_dt=${aml_dt};"\
 		"if imgread kernel recovery ${loadaddr}; then "\
-			"wipeisb; "\
 			"bootm ${loadaddr}; "\
 		"fi"\
 		"\0"\
@@ -219,6 +227,7 @@
 #define CONFIG_PREBOOT  \
 	"run factory_reset_poweroff_protect; "\
 	"run upgrade_check; "\
+	"run bootmode_check; "\
 	"run init_display; "\
 	"run storeargs; "\
 	"run switch_bootmode;"
@@ -236,8 +245,8 @@
 #define CONFIG_CPU_CLK					1536 //MHz. Range: 600-1800, should be multiple of 24
 
 /* ddr */
-#define CONFIG_DDR_SIZE					1024 //MB
-#define CONFIG_DDR_CLK					720  //MHz, Range: 384-1200, should be multiple of 24
+#define CONFIG_DDR_SIZE					2048//1024 //MB
+#define CONFIG_DDR_CLK					912  //MHz, Range: 384-1200, should be multiple of 24
 #define CONFIG_DDR_TYPE					CONFIG_DDR_TYPE_DDR3
 /* DDR channel setting, please refer hardware design.
  *    CONFIG_DDR0_ONLY_32BIT           : one channel 32bit
@@ -251,7 +260,7 @@
 #define CONFIG_DDR_ZQ_POWER_DOWN
 #define CONFIG_DDR_POWER_DOWN_PHY_VREF
 /* ddr detection */
-#define CONFIG_DDR_SIZE_AUTO_DETECT		1 //0:disable, 1:enable
+#define CONFIG_DDR_SIZE_AUTO_DETECT		0 //0:disable, 1:enable
 
 /* storage: emmc/nand/sd */
 #define		CONFIG_STORE_COMPATIBLE 1
@@ -263,10 +272,10 @@
 #ifdef		CONFIG_AML_SD_EMMC
 	#define 	CONFIG_GENERIC_MMC 1
 	#define 	CONFIG_CMD_MMC 1
-	#define CONFIG_EMMC_DDR52_EN 1
-	#define CONFIG_EMMC_DDR52_CLK 35000000
+	#define CONFIG_EMMC_DDR52_EN 0
+	#define CONFIG_EMMC_DDR52_CLK 52000000
 #endif
-//#define 	CONFIG_AML_NAND	1
+#define 	CONFIG_AML_NAND	1
 #ifdef CONFIG_AML_NAND
 #endif
 #define		CONFIG_PARTITIONS 1
@@ -336,15 +345,7 @@
 	#define CONFIG_USB_XHCI_AMLOGIC 1
 #endif //#if defined(CONFIG_CMD_USB)
 //#define CONFIG_AML_TINY_USBTOOL 1
-
-//UBOOT Facotry usb/sdcard burning config
-#define CONFIG_AML_V2_FACTORY_BURN              1       //support facotry usb burning
-#define CONFIG_AML_FACTORY_BURN_LOCAL_UPGRADE   1       //support factory sdcard burning
-#define CONFIG_POWER_KEY_NOT_SUPPORTED_FOR_BURN 1       //There isn't power-key for factory sdcard burning
-#define CONFIG_SD_BURNING_SUPPORT_UI            1       //Displaying upgrading progress bar when sdcard/udisk burning
-
-#define CONFIG_AML_SECURITY_KEY                 1
-#define CONFIG_UNIFY_KEY_MANAGE                 1
+#define CONFIG_AML_V2_FACTORY_BURN   1
 
 /* net */
 #define CONFIG_CMD_NET   1
@@ -381,8 +382,6 @@
 #define CONFIG_CMD_REBOOT 1
 #define CONFIG_CMD_ECHO 1
 #define CONFIG_CMD_JTAG	1
-#define CONFIG_CMD_AUTOSCRIPT 1
-#define CONFIG_CMD_MISC 1
 
 /*file system*/
 #define CONFIG_DOS_PARTITION 1

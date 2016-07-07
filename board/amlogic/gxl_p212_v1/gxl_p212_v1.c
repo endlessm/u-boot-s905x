@@ -31,6 +31,7 @@
 #ifdef CONFIG_AML_VPU
 #include <vpu.h>
 #endif
+#include <vpp.h>
 #ifdef CONFIG_AML_V2_FACTORY_BURN
 #include <amlogic/aml_v2_burning.h>
 #endif// #ifdef CONFIG_AML_V2_FACTORY_BURN
@@ -39,6 +40,7 @@
 #endif
 #include <asm/arch/eth_setup.h>
 #include <phy.h>
+#include <asm/cpu_id.h>
 
 DECLARE_GLOBAL_DATA_PTR;
 
@@ -326,12 +328,17 @@ int board_early_init_f(void){
 #ifdef CONFIG_USB_XHCI_AMLOGIC_GXL
 #include <asm/arch/usb-new.h>
 #include <asm/arch/gpio.h>
+#define CONFIG_GXL_USB_U2_PORT_NUM	2
+#define CONFIG_GXL_USB_U3_PORT_NUM	0
+
 struct amlogic_usb_config g_usb_config_GXL_skt={
 	CONFIG_GXL_XHCI_BASE,
 	USB_ID_MODE_HARDWARE,
 	NULL,//gpio_set_vbus_power, //set_vbus_power
 	CONFIG_GXL_USB_PHY2_BASE,
 	CONFIG_GXL_USB_PHY3_BASE,
+	CONFIG_GXL_USB_U2_PORT_NUM,
+	CONFIG_GXL_USB_U3_PORT_NUM,
 };
 #endif /*CONFIG_USB_XHCI_AMLOGIC*/
 
@@ -367,6 +374,7 @@ int board_init(void)
 #ifdef CONFIG_AML_VPU
 	vpu_probe();
 #endif
+	vpp_init();
 #ifndef CONFIG_AML_IRDETECT_EARLY
 #ifdef CONFIG_AML_HDMITX20
 	hdmi_tx_set_hdmi_5v();
@@ -427,6 +435,9 @@ int board_late_init(void){
 	aml_try_factory_sdcard_burning(0, gd->bd);
 #endif// #ifdef CONFIG_AML_V2_FACTORY_BURN
 
+	if (get_cpu_id().family_id == MESON_CPU_MAJOR_ID_GXL) {
+		setenv("maxcpus","4");
+	}
 	return 0;
 }
 #endif
@@ -440,3 +451,43 @@ phys_size_t get_effective_memsize(void)
 	return (((readl(AO_SEC_GP_CFG0)) & 0xFFFF0000) << 4);
 #endif
 }
+
+#ifdef CONFIG_MULTI_DTB
+int checkhw(char * name)
+{
+	unsigned int ddr_size=0;
+	char loc_name[64] = {0};
+	int i;
+	for (i=0; i<CONFIG_NR_DRAM_BANKS; i++) {
+		ddr_size += gd->bd->bi_dram[i].size;
+	}
+#if defined(CONFIG_SYS_MEM_TOP_HIDE)
+	ddr_size += CONFIG_SYS_MEM_TOP_HIDE;
+#endif
+	switch (ddr_size) {
+		case 0x80000000:
+			strcpy(loc_name, "gxl_p212_2g\0");
+			break;
+		case 0x40000000:
+			strcpy(loc_name, "gxl_p212_1g\0");
+			break;
+		case 0x2000000:
+			strcpy(loc_name, "gxl_p212_512m\0");
+			break;
+		default:
+			//printf("DDR size: 0x%x, multi-dt doesn't support\n", ddr_size);
+			strcpy(loc_name, "gxl_p212_unsupport");
+			break;
+	}
+	strcpy(name, loc_name);
+	setenv("aml_dt", loc_name);
+	return 0;
+}
+#endif
+
+const char * const _env_args_reserve_[] =
+{
+		"aml_dt",
+
+		NULL//Keep NULL be last to tell END
+};
