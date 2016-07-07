@@ -1,0 +1,8 @@
+
+config ENDLESS_S905X
+	bool "Support for Endless S905X board"
+	default n
+
+if ENDLESS_S905X
+source "board/endless/s905x/Kconfig"
+endif

@@ -1,0 +1,22 @@
+if TARGET_MESON_GX
+
+config SYS_CPU
+	string
+	default "armv8"
+
+config SYS_BOARD
+	string
+	default "s905x"
+
+config SYS_VENDOR
+	string
+	default "endless"
+
+config SYS_SOC
+	string
+	default "gxl"
+
+config SYS_CONFIG_NAME
+	default "endless_s905x"
+
+endif
