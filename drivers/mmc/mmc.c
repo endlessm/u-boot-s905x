@@ -18,8 +18,34 @@
 #include <div64.h>
 #include "mmc_private.h"
 
+#include <emmc_partitions.h>
+#ifdef CONFIG_STORE_COMPATIBLE
+#include <partition_table.h>
+#endif
+#include <amlogic/secure_storage.h>
+
 static struct list_head mmc_devices;
 static int cur_dev_num = -1;
+
+bool emmckey_is_access_range_legal (struct mmc *mmc, ulong start, lbaint_t blkcnt) {
+#ifdef CONFIG_STORE_COMPATIBLE
+	ulong key_start_blk, key_end_blk;
+#endif
+	if (aml_is_emmc_tsd(mmc)) {
+#ifdef CONFIG_STORE_COMPATIBLE
+		key_start_blk = ((EMMCKEY_RESERVE_OFFSET + MMC_RESERVED_OFFSET) / MMC_BLOCK_SIZE);
+		key_end_blk = ((EMMCKEY_RESERVE_OFFSET + MMC_RESERVED_OFFSET + 256 * 1024) / MMC_BLOCK_SIZE - 1);
+		if (!(info_disprotect & DISPROTECT_KEY)) {
+			if ((key_start_blk <= (start + blkcnt -1)) && (key_end_blk >= start)) {
+				printf("Emmckey: Access range is illegal!\n");
+				return 0;
+			}
+		}
+#endif
+	}
+
+	return 1;
+}
 
 __weak int board_mmc_getwp(struct mmc *mmc)
 {
@@ -193,7 +219,7 @@ static int mmc_read_blocks(struct mmc *mmc, void *dst, lbaint_t start,
 {
 	struct mmc_cmd cmd;
 	struct mmc_data data;
-
+	int ret;
 	if (blkcnt > 1)
 		cmd.cmdidx = MMC_CMD_READ_MULTIPLE_BLOCK;
 	else
@@ -211,8 +237,7 @@ static int mmc_read_blocks(struct mmc *mmc, void *dst, lbaint_t start,
 	data.blocksize = mmc->read_bl_len;
 	data.flags = MMC_DATA_READ;
 
-	if (mmc_send_cmd(mmc, &cmd, &data))
-		return 0;
+	ret = mmc_send_cmd(mmc, &cmd, &data);
 
 	if (blkcnt > 1) {
 		cmd.cmdidx = MMC_CMD_STOP_TRANSMISSION;
@@ -225,8 +250,10 @@ static int mmc_read_blocks(struct mmc *mmc, void *dst, lbaint_t start,
 			return 0;
 		}
 	}
-
-	return blkcnt;
+	if (ret)
+		return 0;
+	else
+		return blkcnt;
 }
 
 static ulong mmc_bread(int dev_num, lbaint_t start, lbaint_t blkcnt, void *dst)
@@ -247,6 +274,8 @@ static ulong mmc_bread(int dev_num, lbaint_t start, lbaint_t blkcnt, void *dst)
 #endif
 		return 0;
 	}
+	if (!emmckey_is_access_range_legal(mmc, start, blkcnt))
+		return 0;
 
 	if (mmc_set_blocklen(mmc, mmc->read_bl_len))
 		return 0;
@@ -385,6 +414,9 @@ static int mmc_send_op_cond(struct mmc *mmc)
 
  	/* Asking to the card its capabilities */
 	mmc->op_cond_pending = 1;
+
+	return IN_PROGRESS;
+
 	for (i = 0; i < 2; i++) {
 		err = mmc_send_op_cond_iter(mmc, &cmd, i != 0);
 		if (err)
@@ -1006,6 +1038,12 @@ static int mmc_startup(struct mmc *mmc)
 			break;
 		}
 
+		/* dev life time estimate type A/B */
+		mmc->dev_lifetime_est_typ_a
+			= ext_csd[EXT_CSD_DEV_LIFETIME_EST_TYP_A];
+		mmc->dev_lifetime_est_typ_b
+			= ext_csd[EXT_CSD_DEV_LIFETIME_EST_TYP_B];
+
 		/*
 		 * Host needs to enable ERASE_GRP_DEF bit if device is
 		 * partitioned. This bit will be lost every time after a reset
@@ -1409,6 +1447,26 @@ int mmc_init(struct mmc *mmc)
 	if (!err || err == IN_PROGRESS)
 		err = mmc_complete_init(mmc);
 	debug("%s: %d, time %lu\n", __func__, err, get_timer(start));
+	if (err)
+		return err;
+	printf("[%s] mmc init success\n", __func__);
+	if (mmc->block_dev.dev == CONFIG_SYS_MMC_ENV_DEV)  {
+		device_boot_flag = EMMC_BOOT_FLAG;
+		secure_storage_set_info(STORAGE_DEV_EMMC);
+
+	}
+#ifdef CONFIG_STORE_COMPATIBLE
+	info_disprotect |= DISPROTECT_KEY;
+	if (aml_is_emmc_tsd(mmc)) { // eMMC OR TSD
+		if (!is_partition_checked) {
+			if (mmc_device_init(mmc) == 0) {
+				is_partition_checked = true;
+				printf("eMMC/TSD partition table have been checked OK!\n");
+			}
+		}
+	}
+	info_disprotect &= ~DISPROTECT_KEY;
+#endif
 	return err;
 }
 
@@ -1618,3 +1676,64 @@ int mmc_set_rst_n_function(struct mmc *mmc, u8 enable)
 			  enable);
 }
 #endif
+
+int mmc_key_read(unsigned char *buf, unsigned int size)
+{
+	ulong start, start_blk, blkcnt, ret;
+	unsigned char *temp_buf = buf;
+	start = EMMCKEY_RESERVE_OFFSET + MMC_RESERVED_OFFSET;
+	start_blk = (start / MMC_BLOCK_SIZE);
+	blkcnt = (size / MMC_BLOCK_SIZE);
+	info_disprotect |= DISPROTECT_KEY;
+	ret = mmc_bread(1, start_blk, blkcnt, temp_buf);
+	info_disprotect &= ~DISPROTECT_KEY;
+	if (ret != blkcnt) {
+		printf("[%s] %d, mmc_bread error\n",
+			__func__, __LINE__);
+		return 1;
+	}
+	return 0;
+}
+
+extern ulong mmc_bwrite(int dev_num, lbaint_t start,
+				lbaint_t blkcnt, const void *src);
+int mmc_key_write(unsigned char *buf, unsigned int size)
+{
+	ulong start, start_blk, blkcnt, ret;
+	unsigned char * temp_buf = buf;
+	int i = 2;
+	start = EMMCKEY_RESERVE_OFFSET + MMC_RESERVED_OFFSET;
+	start_blk = (start / MMC_BLOCK_SIZE);
+	blkcnt = (size / MMC_BLOCK_SIZE);
+	info_disprotect |= DISPROTECT_KEY;
+	do {
+		ret = mmc_bwrite(1, start_blk, blkcnt, temp_buf);
+		if (ret != blkcnt) {
+			printf("[%s] %d, mmc_bwrite error\n",
+				__func__, __LINE__);
+			return 1;
+		}
+		start_blk += MMC_KEY_SIZE / MMC_BLOCK_SIZE;
+	} while (--i);
+	info_disprotect &= ~DISPROTECT_KEY;
+	return 0;
+}
+
+extern unsigned long mmc_berase(int dev_num,
+				lbaint_t start, lbaint_t blkcnt);
+int mmc_key_erase(void)
+{
+	ulong start, start_blk, blkcnt, ret;
+	start = EMMCKEY_RESERVE_OFFSET + MMC_RESERVED_OFFSET;
+	start_blk = (start / MMC_BLOCK_SIZE);
+	blkcnt = (MMC_KEY_SIZE / MMC_BLOCK_SIZE) * 2;//key and backup key
+	info_disprotect |= DISPROTECT_KEY;
+	ret = mmc_berase(1, start_blk, blkcnt);
+	info_disprotect &= ~DISPROTECT_KEY;
+	if (ret) {
+		printf("[%s] %d mmc_berase error\n",
+				__func__, __LINE__);
+		return 1;
+	}
+	return 0;
+}

@@ -12,7 +12,7 @@ NAME =
 
 # Do not use make's built-in rules and variables
 # (this increases performance and avoids hard-to-debug behaviour);
-MAKEFLAGS += -rR
+MAKEFLAGS += -rR --no-print-directory
 
 # Avoid funny character set dependencies
 unexport LC_ALL
@@ -118,6 +118,8 @@ ifeq ($(KBUILD_SRC),)
 # Do we want to locate output files in a separate directory?
 ifeq ("$(origin O)", "command line")
   KBUILD_OUTPUT := $(O)
+else
+  KBUILD_OUTPUT := build
 endif
 
 # That's our default target when none is given on the command line
@@ -156,7 +158,7 @@ ifeq ($(skip-makefile),)
 # Do not print "Entering directory ...",
 # but we want to display it when entering to the output directory
 # so that IDEs/editors are able to understand relative filenames.
-MAKEFLAGS += --no-print-directory
+#MAKEFLAGS += --no-print-directory
 
 # Call a source code checker (by default, "sparse") as part of the
 # C compilation.
@@ -210,9 +212,12 @@ objtree		:= .
 src		:= $(srctree)
 obj		:= $(objtree)
 
+buildsrc	:= $(abspath $(srctree))
+buildtree	:= $(abspath $(CURDIR)/$(KBUILD_OUTPUT))
+
 VPATH		:= $(srctree)$(if $(KBUILD_EXTMOD),:$(KBUILD_EXTMOD))
 
-export srctree objtree VPATH
+export srctree objtree VPATH KBUILD_OUTPUT buildtree buildsrc
 
 # Make sure CDPATH settings don't interfere
 unexport CDPATH
@@ -240,6 +245,8 @@ export	HOSTARCH HOSTOS
 ifeq ($(HOSTARCH),$(ARCH))
 CROSS_COMPILE ?=
 endif
+
+export CROSS_COMPILE=/opt/gcc-linaro-aarch64-none-elf-4.8-2013.11_linux/bin/aarch64-none-elf-
 
 KCONFIG_CONFIG	?= .config
 export KCONFIG_CONFIG
@@ -582,6 +589,7 @@ include $(srctree)/scripts/Makefile.extrawarn
 KBUILD_CPPFLAGS += $(KCPPFLAGS)
 KBUILD_AFLAGS += $(KAFLAGS)
 KBUILD_CFLAGS += $(KCFLAGS)
+KBUILD_CFLAGS += -Werror
 
 # Use UBOOTINCLUDE when you must reference the include/ directory.
 # Needed to be compatible with the O= option
@@ -616,6 +624,7 @@ libs-y += drivers/gpio/
 libs-y += drivers/i2c/
 libs-y += drivers/mmc/
 libs-y += drivers/mtd/
+libs-$(CONFIG_AML_NAND) += drivers/nand/
 libs-$(CONFIG_CMD_NAND) += drivers/mtd/nand/
 libs-y += drivers/mtd/onenand/
 libs-$(CONFIG_CMD_UBI) += drivers/mtd/ubi/
@@ -645,7 +654,8 @@ libs-$(CONFIG_HAS_POST) += post/
 libs-y += test/
 libs-y += test/dm/
 
-libs-y += $(if $(BOARDDIR),board/$(BOARDDIR)/)
+#libs-y += $(if $(BOARDDIR),board/$(BOARDDIR)/)
+libs-y += $(if $(BOARDDIR),$(BOARDDIR)/)
 
 libs-y := $(sort $(libs-y))
 
@@ -709,7 +719,11 @@ endif
 
 # Always append ALL so that arch config.mk's can add custom ones
 ALL-y += u-boot.srec u-boot.bin System.map binary_size_check
-
+ALL-y += u-boot.hex
+ifeq ($(CONFIG_NEED_BL301), y)
+ALL-y += bl301.bin
+endif
+ALL-y += fip.bin boot.bin
 ALL-$(CONFIG_ONENAND_U_BOOT) += u-boot-onenand.bin
 ifeq ($(CONFIG_SPL_FSL_PBL),y)
 ALL-$(CONFIG_RAMBOOT_PBL) += u-boot-with-spl-pbl.bin
@@ -819,7 +833,7 @@ binary_size_check: u-boot.bin FORCE
 
 u-boot.bin: u-boot FORCE
 	$(call if_changed,objcopy)
-	$(call DO_STATIC_RELA,$<,$@,$(CONFIG_SYS_TEXT_BASE))
+	@$(call DO_STATIC_RELA,$<,$@,$(CONFIG_SYS_TEXT_BASE))
 	$(BOARD_SIZE_CHECK)
 
 u-boot.ldr:	u-boot
@@ -833,6 +847,124 @@ OBJCOPYFLAGS_u-boot.ldr.srec := -I binary -O srec
 
 u-boot.ldr.hex u-boot.ldr.srec: u-boot.ldr FORCE
 	$(call if_changed,objcopy)
+
+.PHONY: u-boot-comp.bin
+u-boot-comp.bin:u-boot.bin
+	#tools/uclpack $< $@
+	cp $< $@
+#	$(objtree)/tools/uclpack $< $@
+
+FIP_FOLDER := $(srctree)/fip
+ifeq ($(CONFIG_SUPPORT_CUSOTMER_BOARD), y) #SUPPORT_CUSOTMER_BOARD
+FIP_FOLDER_SOC := $(srctree)/customer/board/$(BOARD)/fip/$(SOC)
+else #SUPPORT_CUSOTMER_BOARD
+FIP_FOLDER_SOC := $(FIP_FOLDER)/$(SOC)
+endif #SUPPORT_CUSOTMER_BOARD
+
+FIP_ARGS += --bl30 $(FIP_FOLDER_SOC)/bl30_new.bin
+#remove bl301
+#ifeq ($(CONFIG_NEED_BL301), y)
+#FIP_ARGS += --bl301 $(FIP_FOLDER_SOC)/bl301.bin
+#endif
+ifeq ($(CONFIG_FIP_IMG_SUPPORT), y)
+BL3X_SUFFIX := img
+else
+BL3X_SUFFIX := bin
+endif
+FIP_ARGS += --bl31 $(FIP_FOLDER_SOC)/bl31.$(BL3X_SUFFIX)
+ifeq ($(CONFIG_NEED_BL32), y)
+FIP_BL32 := $(notdir $(shell find $(FIP_FOLDER_SOC) -name "bl32.$(BL3X_SUFFIX)"))
+ifeq ($(FIP_BL32), bl32.$(BL3X_SUFFIX))
+FIP_ARGS += --bl32 $(FIP_FOLDER_SOC)/bl32.$(BL3X_SUFFIX)
+FIP_BL32_PROCESS = --bl32 $(FIP_FOLDER_SOC)/bl32.$(BL3X_SUFFIX).enc
+endif
+endif
+FIP_ARGS += --bl33 $(FIP_FOLDER_SOC)/bl33.bin
+
+.PHONY: fip.bin
+ifeq ($(CONFIG_NEED_BL301), y)
+fip.bin: tools prepare acs.bin bl301.bin
+else
+fip.bin: tools prepare acs.bin
+endif
+	$(Q)cp u-boot.bin $(FIP_FOLDER_SOC)/bl33.bin
+	@rm -f $(FIP_FOLDER_SOC)/fip.bin
+	$(Q)$(FIP_FOLDER)/fip_create ${FIP_ARGS} $(FIP_FOLDER_SOC)/fip.bin
+	$(Q)$(FIP_FOLDER)/fip_create --dump $(FIP_FOLDER_SOC)/fip.bin
+
+ifeq ($(CONFIG_NEED_BL301), y)
+.PHONY : bl301.bin
+bl301.bin: tools prepare acs.bin bl21.bin
+	$(Q)$(MAKE) -C $(srctree)/$(CPUDIR)/${SOC}/firmware/scp_task
+	$(Q)cp $(buildtree)/scp_task/bl301.bin $(FIP_FOLDER_SOC)/bl301.bin -f
+	$(Q)$(FIP_FOLDER)/blx_fix.sh \
+		$(FIP_FOLDER_SOC)/bl30.bin \
+		$(FIP_FOLDER_SOC)/zero_tmp \
+		$(FIP_FOLDER_SOC)/bl30_zero.bin \
+		$(FIP_FOLDER_SOC)/bl301.bin \
+		$(FIP_FOLDER_SOC)/bl301_zero.bin \
+		$(FIP_FOLDER_SOC)/bl30_new.bin \
+		bl30
+endif
+
+.PHONY : acs.bin
+acs.bin: tools prepare u-boot.bin
+	$(Q)$(MAKE) -C $(srctree)/$(CPUDIR)/${SOC}/firmware/acs all FIRMWARE=$@
+	$(Q)cp $(buildtree)/${BOARDDIR}/firmware/acs.bin $(FIP_FOLDER_SOC)/acs.bin -f
+
+.PHONY : bl21.bin
+bl21.bin: tools prepare u-boot.bin acs.bin
+	$(Q)$(MAKE) -C $(srctree)/$(CPUDIR)/${SOC}/firmware/bl21 all FIRMWARE=$@
+	$(Q)cp $(buildtree)/${BOARDDIR}/firmware/bl21.bin $(FIP_FOLDER_SOC)/bl21.bin -f
+
+.PHONY : boot.bin
+boot.bin: fip.bin
+ifeq ($(CONFIG_AML_UBOOT_AUTO_TEST), y)
+	$(Q)python $(FIP_FOLDER)/acs_tool.pyc $(FIP_FOLDER_SOC)/bl2_utst.bin $(FIP_FOLDER_SOC)/bl2_acs.bin $(FIP_FOLDER_SOC)/acs.bin 0
+else
+	$(Q)python $(FIP_FOLDER)/acs_tool.pyc $(FIP_FOLDER_SOC)/bl2.bin $(FIP_FOLDER_SOC)/bl2_acs.bin $(FIP_FOLDER_SOC)/acs.bin 0
+endif
+	$(Q)$(FIP_FOLDER)/blx_fix.sh \
+		$(FIP_FOLDER_SOC)/bl2_acs.bin \
+		$(FIP_FOLDER_SOC)/zero_tmp \
+		$(FIP_FOLDER_SOC)/bl2_zero.bin \
+		$(FIP_FOLDER_SOC)/bl21.bin \
+		$(FIP_FOLDER_SOC)/bl21_zero.bin \
+		$(FIP_FOLDER_SOC)/bl2_new.bin \
+		bl2
+	$(Q)cat $(FIP_FOLDER_SOC)/bl2_new.bin  $(FIP_FOLDER_SOC)/fip.bin > $(FIP_FOLDER_SOC)/boot_new.bin
+
+ifeq ($(SOC),gxl)
+	$(Q)$(FIP_FOLDER_SOC)/aml_encrypt_$(SOC) --bl3enc  --input $(FIP_FOLDER_SOC)/bl30_new.bin
+	$(Q)$(FIP_FOLDER_SOC)/aml_encrypt_$(SOC) --bl3enc  --input $(FIP_FOLDER_SOC)/bl31.$(BL3X_SUFFIX)
+ifeq ($(FIP_BL32), bl32.$(BL3X_SUFFIX))
+	$(Q)$(FIP_FOLDER_SOC)/aml_encrypt_$(SOC) --bl3enc  --input $(FIP_FOLDER_SOC)/bl32.$(BL3X_SUFFIX)
+endif
+	$(Q)$(FIP_FOLDER_SOC)/aml_encrypt_$(SOC) --bl3enc  --input $(FIP_FOLDER_SOC)/bl33.bin
+	$(Q)$(FIP_FOLDER_SOC)/aml_encrypt_$(SOC) --bl2sig  --input $(FIP_FOLDER_SOC)/bl2_new.bin   --output $(FIP_FOLDER_SOC)/bl2.n.bin.sig
+	$(Q)$(FIP_FOLDER_SOC)/aml_encrypt_$(SOC) --bootmk  --output $(FIP_FOLDER_SOC)/u-boot.bin \
+	--bl2   $(FIP_FOLDER_SOC)/bl2.n.bin.sig  --bl30  $(FIP_FOLDER_SOC)/bl30_new.bin.enc  \
+	--bl31  $(FIP_FOLDER_SOC)/bl31.$(BL3X_SUFFIX).enc  $(FIP_BL32_PROCESS) --bl33  $(FIP_FOLDER_SOC)/bl33.bin.enc
+	@rm -f $(FIP_FOLDER_SOC)/bl*.enc $(FIP_FOLDER_SOC)/bl2*.sig
+else
+	$(Q)$(FIP_FOLDER_SOC)/aml_encrypt_$(SOC) --bootsig --input $(FIP_FOLDER_SOC)/boot_new.bin --output $(FIP_FOLDER_SOC)/u-boot.bin
+endif
+
+ifeq ($(CONFIG_AML_CRYPTO_UBOOT), y)
+ifeq ($(SOC),gxl)
+	$(Q)$(FIP_FOLDER_SOC)/aml_encrypt_$(SOC) --efsgen --amluserkey $(srctree)/$(BOARDDIR)/aml-user-key.sig \
+			--output $(FIP_FOLDER_SOC)/u-boot.bin.encrypt.efuse
+endif
+	$(Q)$(FIP_FOLDER_SOC)/aml_encrypt_$(SOC) --bootsig --input $(FIP_FOLDER_SOC)/u-boot.bin --amluserkey $(srctree)/$(BOARDDIR)/aml-user-key.sig \
+	 --aeskey enable --output $(FIP_FOLDER_SOC)/u-boot.bin.encrypt
+endif
+ifeq ($(CONFIG_AML_CRYPTO_IMG), y)
+	$(Q)$(FIP_FOLDER_SOC)/aml_encrypt_$(SOC) --imgsig --input $(srctree)/$(BOARDDIR)/boot.img --amluserkey $(srctree)/$(BOARDDIR)/aml-user-key.sig --output $(FIP_FOLDER_SOC)/boot.img.encrypt
+	@cp -f $(FIP_FOLDER_SOC)/boot.img.encrypt $(FIP_FOLDER)/boot.img.encrypt
+endif
+	@cp -f $(FIP_FOLDER_SOC)/u-boot.* $(FIP_FOLDER)/
+	@rm -f $(FIP_FOLDER_SOC)/bl2_new.bin $(FIP_FOLDER_SOC)/boot_new.bin
+	@echo '$(FIP_FOLDER_SOC)/u-boot.bin build done!'
 
 #
 # U-Boot entry point, needed for booting of full-blown U-Boot
@@ -1335,9 +1467,21 @@ distclean: mrproper
 		\( -name '*.orig' -o -name '*.rej' -o -name '*~' \
 		-o -name '*.bak' -o -name '#*#' -o -name '.*.orig' \
 		-o -name '.*.rej' -o -name '*%' -o -name 'core' \
-		-o -name '*.pyc' \) \
+		-o -name '*.o' \) \
 		-type f -print | xargs rm -f
 	@rm -f boards.cfg
+	@rm -rf $(buildtree)/*
+	@rm -f $(FIP_FOLDER_SOC)/acs.bin
+	@rm -f $(FIP_FOLDER_SOC)/bl2_acs.bin
+	@rm -f $(FIP_FOLDER_SOC)/bl301.bin
+	@rm -f $(FIP_FOLDER_SOC)/bl33.bin
+	@rm -f $(FIP_FOLDER_SOC)/fip.bin
+	@rm -f $(FIP_FOLDER_SOC)/boot.bin
+	@rm -f $(FIP_FOLDER_SOC)/boot_sd.bin
+	@rm -f $(FIP_FOLDER_SOC)/u-boot.bin
+	@rm -f $(FIP_FOLDER_SOC)/u-boot.bin.* $(FIP_FOLDER_SOC)/*.encrypt
+	@rm -f $(FIP_FOLDER)/u-boot.bin.* $(FIP_FOLDER)/*.bin $(FIP_FOLDER)/*.encrypt
+	@rm -f $(srctree)/fip/aml_encrypt_gxb
 
 backup:
 	F=`basename $(srctree)` ; cd .. ; \
@@ -1385,6 +1529,8 @@ help:
 	@echo  ''
 	@echo  'Execute "make" or "make all" to build all targets marked with [*] '
 	@echo  'For further info see the ./README file'
+	@export srctree
+	@$(srctree)/amlogic_help.sh
 
 
 # Documentation targets
