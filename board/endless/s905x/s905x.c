@@ -374,7 +374,7 @@ int board_init(void)
 #ifdef CONFIG_AML_VPU
 	vpu_probe();
 #endif
-	vpp_init();
+//	vpp_init();
 #ifndef CONFIG_AML_IRDETECT_EARLY
 #ifdef CONFIG_AML_HDMITX20
 	hdmi_tx_set_hdmi_5v();
