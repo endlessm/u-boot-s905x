@@ -1,0 +1,11 @@
+Source: u-boot-s905x
+Section: misc
+Priority: extra
+Build-Depends: quilt (>= 0.46-7~), debhelper (>= 7.0.50~)
+Standards-Version: 3.9.1
+Maintainer: Carlo Caione <carlo@endlessm.com>
+
+Package: u-boot-s905x-p212
+Architecture: armhf
+Depends: ${shlibs:Depends}, ${misc:Depends}
+Description: U-Boot bootloader binary for the P212 board
