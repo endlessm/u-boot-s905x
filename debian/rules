@@ -43,22 +43,12 @@ override_dh_auto_build:
 	while read plat deb buildtarget ignoreinstalltargets; do \
 		expr $$plat : "^#" > /dev/null && continue; \
 		mkdir -p debian/build/$$plat; \
-		$(MAKE) O=$$PWD/debian/build/$$plat $${plat}_defconfig; \
-		test "$$buildtarget" = "-" && $(MAKE) CROSS_COMPILE=aarch64-linux-gnu- O=$$PWD/debian/build/$$plat; \
-		test "$$buildtarget" != "-" && $(MAKE) CROSS_COMPILE=aarch64-linux-gnu- O=$$PWD/debian/build/$$plat \
+		$(MAKE) ARCH=arm O=$$PWD/debian/build/$$plat $${plat}_defconfig; \
+		test "$$buildtarget" = "-" && $(MAKE) ARCH=arm CROSS_COMPILE=aarch64-linux-gnu- O=$$PWD/debian/build/$$plat; \
+		test "$$buildtarget" != "-" && $(MAKE) ARCH=arm CROSS_COMPILE=aarch64-linux-gnu- O=$$PWD/debian/build/$$plat \
 			$$PWD/debian/build/$$plat/$$buildtarget; \
 		true; \
 	done <debian/platforms-debs-targets
 
-override_dh_auto_install:
-	while read plat deb ignorebuildtarget installtargets; do \
-		expr $$plat : "^#" > /dev/null && continue; \
-		for target in $$installtargets; do \
-			mkdir -p debian/u-boot-s905x-$$deb/usr/lib/u-boot/$$plat/; \
-			test -e debian/build/$$plat/fip/gxl/$$target && \
-				install	-m644 \
-					-t debian/u-boot-s905x-$$deb/usr/lib/u-boot/$$plat/ \
-					debian/build/$$plat/fip/gxl/$$target; \
-		done; \
-		true; \
-	done <debian/platforms-debs-targets
+override_dh_auto_test:
+	# skip tests.

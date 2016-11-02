@@ -1,1 +1,1 @@
-debian/build/endless_s905x/fip/gxl/u-boot.bin.sd.bin /usr/lib/u-boot/s905x_p212
+fip/gxl/u-boot.bin.sd.bin /usr/lib/u-boot/s905x_p212
