@@ -395,11 +395,13 @@ static int do_store_init(cmd_tbl_t * cmdtp, int flag, int argc, char * const arg
                 device_boot_flag = EMMC_BOOT_FLAG;
                 sprintf(str, "mmc dev %d", CONFIG_SYS_MMC_ENV_DEV);
                 run_command(str,0);
+#ifndef CONFIG_ENDLESS_S905X
                 ret = run_command("mmcinfo", 0);
                 if (ret != 0) {
                     store_msg("amlmmc cmd %s failed \n",cmd);
                     return -1;
                 }
+#endif
                 if (init_flag == STORE_BOOT_ERASE_PROTECT_CACHE) { // OTA upgrade protect cache
                     ret = run_command("amlmmc erase non_cache", 0);
                 }else if(init_flag >= STORE_BOOT_ERASE_ALL){ // erase all except  reserved area
