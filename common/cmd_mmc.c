@@ -400,7 +400,7 @@ static int do_mmc_part(cmd_tbl_t *cmdtp, int flag,
 static int do_mmc_dev(cmd_tbl_t *cmdtp, int flag,
 		      int argc, char * const argv[])
 {
-	int dev, part = 0, ret;
+	int dev, part = 0, __attribute__((unused)) ret;
 	struct mmc *mmc;
 
 	if (argc == 1) {
@@ -423,6 +423,7 @@ static int do_mmc_dev(cmd_tbl_t *cmdtp, int flag,
 	if (!mmc)
 		return CMD_RET_FAILURE;
 
+#ifndef CONFIG_ENDLESS_S905X
 	ret = mmc_select_hwpart(dev, part);
 	printf("switch to partitions #%d, %s\n",
 	       part, (!ret) ? "OK" : "ERROR");
@@ -435,6 +436,7 @@ static int do_mmc_dev(cmd_tbl_t *cmdtp, int flag,
 	else
 		printf("mmc%d(part %d) is current device\n",
 		       curr_device, mmc->part_num);
+#endif
 
 	return CMD_RET_SUCCESS;
 }

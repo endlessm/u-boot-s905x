@@ -103,6 +103,7 @@
             "run load_boot_env; run import_boot_env; setenv bootargs console=ttyS0,115200 ${bootargs}; run uenv_bootcmd;"\
             "\0"\
 
+#define CONFIG_PREBOOT "store init"
 #define CONFIG_BOOTCOMMAND "run endless_select_bootdev"
 
 #define CONFIG_ENV_IS_NOWHERE  1
