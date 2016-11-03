@@ -1,1 +1,1 @@
-fip/gxl/u-boot.bin.sd.bin /usr/lib/u-boot/s905x
+fip/gxl/u-boot.bin.padded /usr/lib/u-boot/s905x
