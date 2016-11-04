@@ -71,13 +71,12 @@
 #define CONFIG_SYS_MAXARGS  64
 #define CONFIG_EXTRA_ENV_SETTINGS \
         "fdt_high=0x20000000\0"\
-        "testfile=/boot/Image\0"\
+        "testfile=/boot/uEnv.txt\0"\
         "loadaddr=0x11000000\0"\
-        "dtb_loadaddr=0x1000000\0"\
         "initrd_loadaddr=0x13000000\0"\
         "script_loadaddr=0x11000000\0"\
         "load_boot_env="\
-            "echo >>> Load Boot Script <<<;"\
+            "echo >>> Loading Boot Script <<<;"\
             "ext4load mmc ${bootdev}:1 ${script_loadaddr} /boot/uEnv.txt;"\
             "\0"\
         "import_boot_env="\
@@ -86,10 +85,9 @@
             "\0"\
         "uenv_bootcmd="\
             "echo >>> Booting <<<;"\
-            "ext4load mmc ${bootdev}:1 ${loadaddr} /boot/Image;"\
-            "ext4load mmc ${bootdev}:1 ${initrd_loadaddr} /boot/uInitrd;"\
-            "ext4load mmc ${bootdev}:1 ${dtb_loadaddr} /boot/endless_s905x.dtb;"\
-            "booti ${loadaddr} ${initrd_loadaddr} ${dtb_loadaddr};"\
+            "ext4load mmc ${bootdev}:1 ${loadaddr} /boot/${kernel_image};"\
+            "ext4load mmc ${bootdev}:1 ${initrd_loadaddr} /boot/${ramdisk_image};"\
+            "bootm ${loadaddr} ${initrd_loadaddr}"\
             "\0"\
         "endless_select_bootdev="\
             "if test -e mmc 0:1 ${testfile}; then "\
