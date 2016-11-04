@@ -5,7 +5,7 @@ Build-Depends: quilt (>= 0.46-7~), debhelper (>= 7.0.50~), gcc-aarch64-linux-gnu
 Standards-Version: 3.9.1
 Maintainer: Carlo Caione <carlo@endlessm.com>
 
-Package: u-boot-s905x-p212
+Package: u-boot-s905x
 Architecture: all
 Depends: ${shlibs:Depends}, ${misc:Depends}
-Description: U-Boot bootloader binary for the P212 board
+Description: U-Boot bootloader binary for the S905X-based boards

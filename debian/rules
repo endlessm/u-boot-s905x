@@ -49,6 +49,7 @@ override_dh_auto_build:
 			$$PWD/debian/build/$$plat/$$buildtarget; \
 		true; \
 	done <debian/platforms-debs-targets
+	cp -v fip/gxl/u-boot.bin.sd.bin fip/gxl/u-boot.bin.padded
 
 override_dh_auto_test:
 	# skip tests.
