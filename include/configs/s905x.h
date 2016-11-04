@@ -79,33 +79,33 @@
             "fsuuid mmc ${bootdev}:1 rootuuid"\
             "\0"\
         "load_boot_env="\
-            "echo >>> Loading Boot Script <<<;"\
-            "ext4load mmc ${bootdev}:1 ${script_loadaddr} /boot/uEnv.txt;"\
+            "echo >>> Loading Boot Script <<<; "\
+            "ext4load mmc ${bootdev}:1 ${script_loadaddr} /boot/uEnv.txt"\
             "\0"\
         "import_boot_env="\
-            "echo >>> Importing environment <<<;"\
-            "env import -t ${script_loadaddr} ${filesize};"\
+            "echo >>> Importing environment <<<; "\
+            "env import -t ${script_loadaddr} ${filesize}"\
             "\0"\
         "uenv_bootcmd="\
-            "echo >>> Booting <<<;"\
-            "ext4load mmc ${bootdev}:1 ${loadaddr} /boot/${kernel_image};"\
-            "ext4load mmc ${bootdev}:1 ${initrd_loadaddr} /boot/${ramdisk_image};"\
+            "echo >>> Booting <<<; "\
+            "ext4load mmc ${bootdev}:1 ${loadaddr} /boot/${kernel_image}; "\
+            "ext4load mmc ${bootdev}:1 ${initrd_loadaddr} /boot/${ramdisk_image}; "\
             "bootm ${loadaddr} ${initrd_loadaddr}"\
             "\0"\
         "endless_select_bootdev="\
             "if test -e mmc 0:1 ${testfile}; then "\
-                "setenv bootdev 0;"\
+                "setenv bootdev 0; "\
             "else if test -e mmc 1:1 ${testfile}; then "\
-                "setenv bootdev 1;"\
+                "setenv bootdev 1; "\
             "fi;fi;"\
-            "run endless_boot;"\
+            "run endless_boot"\
             "\0"\
         "endless_boot="\
-            "run load_boot_env;"\
-            "run import_boot_env;"\
-            "run get_rootuuid;"\
-            "setenv bootargs root=UUID=${rootuuid} console=ttyS0,115200 ${bootargs};"\
-            "run uenv_bootcmd;"\
+            "run load_boot_env; "\
+            "run import_boot_env; "\
+            "run get_rootuuid; "\
+            "setenv bootargs root=UUID=${rootuuid} console=ttyS0,115200 ${bootargs}; "\
+            "run uenv_bootcmd"\
             "\0"\
 
 #define CONFIG_PREBOOT "store init"
