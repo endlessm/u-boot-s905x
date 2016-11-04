@@ -75,6 +75,9 @@
         "loadaddr=0x11000000\0"\
         "initrd_loadaddr=0x13000000\0"\
         "script_loadaddr=0x11000000\0"\
+        "get_rootuuid="\
+            "fsuuid mmc ${bootdev}:1 rootuuid"\
+            "\0"\
         "load_boot_env="\
             "echo >>> Loading Boot Script <<<;"\
             "ext4load mmc ${bootdev}:1 ${script_loadaddr} /boot/uEnv.txt;"\
@@ -98,7 +101,11 @@
             "run endless_boot;"\
             "\0"\
         "endless_boot="\
-            "run load_boot_env; run import_boot_env; setenv bootargs console=ttyS0,115200 ${bootargs}; run uenv_bootcmd;"\
+            "run load_boot_env;"\
+            "run import_boot_env;"\
+            "run get_rootuuid;"\
+            "setenv bootargs root=UUID=${rootuuid} console=ttyS0,115200 ${bootargs};"\
+            "run uenv_bootcmd;"\
             "\0"\
 
 #define CONFIG_PREBOOT "store init"
@@ -243,6 +250,7 @@
 #define CONFIG_CMD_JTAG	1
 #define CONFIG_CMD_AUTOSCRIPT 1
 #define CONFIG_CMD_MISC 1
+#define CONFIG_CMD_FS_UUID 1
 
 /*file system*/
 #define CONFIG_DOS_PARTITION 1
