@@ -93,14 +93,17 @@
 			"setenv bootdev 0; "\
 		"else if test -e mmc 1:1 ${testfile}; then "\
 			"setenv bootdev 1; "\
-		"fi;fi;"\
+		"fi;fi; "\
+		"if test ${debug_board} = 1; then "\
+			"setenv debug_board_bootarg console=ttyS0,115200; "\
+		"fi; "\
 		"run endless_boot"\
 		"\0"\
 	"endless_boot="\
 		"run load_boot_env; "\
 		"run import_boot_env; "\
 		"run get_rootuuid; "\
-		"setenv bootargs root=UUID=${rootuuid} console=ttyS0,115200 ${bootargs}; "\
+		"setenv bootargs root=UUID=${rootuuid} ${debug_board_bootarg} ${bootargs}; "\
 		"run uenv_bootcmd"\
 		"\0"\
 
