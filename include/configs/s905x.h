@@ -86,7 +86,7 @@
 		"echo >>> Booting <<<; "\
 		"ext4load mmc ${bootdev}:1 ${loadaddr} /boot/${kernel_image}; "\
 		"ext4load mmc ${bootdev}:1 ${initrd_loadaddr} /boot/${ramdisk_image}; "\
-		"bootm ${loadaddr} ${initrd_loadaddr}"\
+		"bootm ${loadaddr} ${initrd_loadaddr}:${filesize}"\
 		"\0"\
 	"endless_select_bootdev="\
 		"if test -e mmc 0:1 ${testfile}; then "\
@@ -268,6 +268,7 @@
 #define CONFIG_CMD_CPU_TEMP
 #define CONFIG_SYS_MEM_TOP_HIDE			0x08000000	/* hide 128MB for kernel reserve */
 #define CONFIG_MULTI_DTB
+#define CONFIG_SUPPORT_RAW_INITRD
 
 /* debug mode defines */
 #ifdef CONFIG_DEBUG_MODE
