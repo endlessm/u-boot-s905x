@@ -68,7 +68,7 @@
 #define CONFIG_EXTRA_ENV_SETTINGS \
 	"fdt_high=0x20000000\0"\
 	"testfile=/boot/uEnv.txt\0"\
-	"loadaddr=0x11000000\0"\
+	"loadaddr=0x1080000\0"\
 	"initrd_loadaddr=0x13000000\0"\
 	"script_loadaddr=0x11000000\0"\
 	"get_rootuuid="\
