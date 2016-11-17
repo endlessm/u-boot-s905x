@@ -103,7 +103,7 @@
 		"run load_boot_env; "\
 		"run import_boot_env; "\
 		"run get_rootuuid; "\
-		"setenv bootargs root=UUID=${rootuuid} ${debug_board_bootarg} ${bootargs}; "\
+		"setenv bootargs root=UUID=${rootuuid} ${debug_board_bootarg} ${bootargs} ${custom_bootargs}; "\
 		"run uenv_bootcmd"\
 		"\0"\
 
