@@ -87,13 +87,14 @@ enum lcd_mode_e {
 
 enum lcd_chip_e {
 	LCD_CHIP_M6 = 0,
-	LCD_CHIP_M8,
-	LCD_CHIP_M8B,
-	LCD_CHIP_M8M2,
-	LCD_CHIP_G9TV,
-	LCD_CHIP_G9BB,
-	LCD_CHIP_GXTVBB,
-	LCD_CHIP_MAX,
+	LCD_CHIP_M8,     /* 1 */
+	LCD_CHIP_M8B,    /* 2 */
+	LCD_CHIP_M8M2,   /* 3 */
+	LCD_CHIP_G9TV,   /* 4 */
+	LCD_CHIP_G9BB,   /* 5 */
+	LCD_CHIP_GXTVBB, /* 6 */
+	LCD_CHIP_TXL,    /* 7 */
+	LCD_CHIP_MAX,    /* 8 */
 };
 
 enum lcd_type_e {
@@ -115,14 +116,26 @@ struct lcd_basic_s {
 	unsigned short v_active; /* Vertical display area */
 	unsigned short h_period; /* Horizontal total period time */
 	unsigned short v_period; /* Vertical total period time */
+	unsigned short h_period_min;
+	unsigned short h_period_max;
+	unsigned short v_period_min;
+	unsigned short v_period_max;
+	unsigned int lcd_clk_min;
+	unsigned int lcd_clk_max;
 
 	unsigned short screen_width;  /* screen physical width in "mm" unit */
 	unsigned short screen_height; /* screen physical height in "mm" unit */
 };
 
+#define LCD_CLK_FRAC_UPDATE     (1 << 0)
+#define LCD_CLK_PLL_CHANGE      (1 << 1)
 struct lcd_timing_s {
 	unsigned char clk_auto; /* clk parameters auto generation */
 	unsigned int lcd_clk;   /* pixel clock(unit: Hz) */
+	unsigned int lcd_clk_dft; /* internal used */
+	unsigned int h_period_dft; /* internal used */
+	unsigned int v_period_dft; /* internal used */
+	unsigned char clk_change; /* internal used */
 	unsigned int pll_ctrl;  /* pll settings */
 	unsigned int div_ctrl;  /* divider settings */
 	unsigned int clk_ctrl;  /* clock settings */
@@ -184,8 +197,10 @@ struct ttl_config_s {
 	unsigned int swap_ctrl; /* [1]rb swap, [0]bit swap */
 };
 
-#define LVDS_PHY_VSWING_DFT    3
-#define LVDS_PHY_PREEM_DFT     0
+#define LVDS_PHY_VSWING_DFT        3
+#define LVDS_PHY_PREEM_DFT         0
+#define LVDS_PHY_CLK_VSWING_DFT    0
+#define LVDS_PHY_CLK_PREEM_DFT     0
 struct lvds_config_s {
 	unsigned int lvds_vswing;
 	unsigned int lvds_repack;
@@ -195,6 +210,8 @@ struct lvds_config_s {
 	unsigned int port_sel;
 	unsigned int phy_vswing;
 	unsigned int phy_preem;
+	unsigned int phy_clk_vswing;
+	unsigned int phy_clk_preem;
 };
 
 #define VX1_PHY_VSWING_DFT    3

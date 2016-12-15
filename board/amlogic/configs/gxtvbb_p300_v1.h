@@ -37,6 +37,12 @@
 #define CONFIG_VDDEE_INIT_VOLTAGE	1100		// voltage for power up
 #define CONFIG_VDDEE_SLEEP_VOLTAGE	 850		// voltage for suspend
 
+#define CONFIG_AML_SPICC
+/*#define CONFIG_AML_LOCAL_DIMMING*/
+/*#define CONFIG_AML_LOCAL_DIMMING_IW7019*/
+/*#define CONFIG_AML_LOCAL_DIMMING_OB3350*/
+
+
 /* configs for CEC */
 #define CONFIG_CEC_OSD_NAME		"AML_TV"
 #define CONFIG_CEC_WAKEUP
@@ -68,7 +74,7 @@
 /* args/envs */
 #define CONFIG_SYS_MAXARGS  64
 #define CONFIG_EXTRA_ENV_SETTINGS \
-	"firstboot=1\0"\
+	"firstboot=0\0"\
 	"upgrade_step=0\0"\
 	"loadaddr=1080000\0"\
 	"panel_type=lvds_2\0" \
@@ -416,6 +422,9 @@
 
 /* other functions */
 #define CONFIG_NEED_BL301	1
+#define CONFIG_NEED_BL32	1
+#define CONFIG_CMD_RSVMEM	1
+#define CONFIG_FIP_IMG_SUPPORT	1
 #define CONFIG_BOOTDELAY	1 //delay 1s
 #define CONFIG_SYS_LONGHELP 1
 #define CONFIG_CMD_MISC     1

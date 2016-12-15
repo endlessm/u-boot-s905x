@@ -13,19 +13,24 @@
 #include <div64.h>
 #include <linux/err.h>
 #include<partition_table.h>
+#include<emmc_partitions.h>
 #include <libfdt.h>
 #include <linux/string.h>
 #include <asm/cpu_id.h>
 
 #if defined(CONFIG_AML_NAND)
 extern int amlnf_init(unsigned flag);
-extern int amlnf_key_write(u8 *buf, int len);
-extern int amlnf_key_read(u8 * buf, int len);
+extern int amlnf_key_write(u8 *buf, int len, uint32_t *actual_lenth);
+extern int amlnf_key_read(u8 * buf, int len, uint32_t *actual_lenth);
 #endif
 extern int get_partition_from_dts(unsigned char * buffer);
-extern int mmc_key_read(unsigned char *buf, unsigned int size);
-extern int mmc_key_write(unsigned char *buf, unsigned int size);
+extern int mmc_key_read(unsigned char *buf,
+		unsigned int size, uint32_t *actual_lenth);
+extern int mmc_key_write(unsigned char *buf,
+		unsigned int size, uint32_t *actual_lenth);
 extern int mmc_key_erase(void);
+extern int find_dev_num_by_partition_name (char *name);
+extern unsigned emmc_cur_partition;
 
 #define MsgP(fmt...)   printf("[store]"fmt)
 #define ErrP(fmt...)   printf("[store]Err:%s,L%d:", __func__, __LINE__),printf(fmt)
@@ -295,7 +300,7 @@ static int do_store_key_ops(cmd_tbl_t * cmdtp, int flag, int argc, char * const 
 	return ret;
 }
 
-int store_key_read(uint8_t * buffer,  uint32_t length)
+int store_key_read(uint8_t * buffer, uint32_t length, uint32_t *actual_lenth)
 {
 	int ret = 0;
 	switch (device_boot_flag)
@@ -303,12 +308,12 @@ int store_key_read(uint8_t * buffer,  uint32_t length)
 #if defined(CONFIG_AML_NAND)
 		case NAND_BOOT_FLAG:
 		case SPI_NAND_FLAG:
-		ret = amlnf_key_read(buffer, (int) length);
+		ret = amlnf_key_read(buffer, (int) length, actual_lenth);
 		break;
 #endif
 		case EMMC_BOOT_FLAG:
 		case SPI_EMMC_FLAG:
-		ret = mmc_key_read(buffer, (int) length);
+		ret = mmc_key_read(buffer, (int) length, actual_lenth);
 		break;
 		default:
 		ErrP("device_boot_flag=0x%x err\n", device_boot_flag);
@@ -317,20 +322,21 @@ int store_key_read(uint8_t * buffer,  uint32_t length)
 	return ret;
 }
 
-int store_key_write(uint8_t * buffer, uint32_t length)
+int store_key_write(uint8_t * buffer, uint32_t length, uint32_t *actual_lenth)
 {
 	int ret = 0;
+
 	switch (device_boot_flag)
 	{
 #if defined(CONFIG_AML_NAND)
 		case NAND_BOOT_FLAG:
 		case SPI_NAND_FLAG:
-		ret = amlnf_key_write(buffer, (int) length);
+		ret = amlnf_key_write(buffer, (int) length,  actual_lenth);
 		break;
 #endif
 		case EMMC_BOOT_FLAG:
 		case SPI_EMMC_FLAG:
-		ret = mmc_key_write(buffer, (int) length);
+		ret = mmc_key_write(buffer, (int) length, actual_lenth);
 		break;
 		default:
 		ErrP("device_boot_flag=0x%x err\n", device_boot_flag);
@@ -840,7 +846,52 @@ E_SWITCH_BACK:
             }
         #endif
         }
-    }
+	} else if (strcmp(area, "partition") == 0) {
+		if (device_boot_flag == EMMC_BOOT_FLAG) {
+			int blk_shift;
+			int dev, n;
+			u64 cnt=0, blk =0;
+			struct partitions *part_info;
+			struct mmc *mmc = NULL;
+			char *p_name = NULL;
+
+			p_name = argv[3];
+			if (!p_name)
+				return CMD_RET_USAGE;
+
+			dev = find_dev_num_by_partition_name(p_name);
+			mmc = find_mmc_device(dev);
+			if (!mmc)
+				return CMD_RET_FAILURE;
+
+			mmc_init(mmc);
+			blk_shift = ffs(mmc->read_bl_len) -1;
+			if (!(info_disprotect & DISPROTECT_KEY)
+					&& (strncmp(p_name, MMC_RESERVED_NAME,
+							sizeof(MMC_RESERVED_NAME)) == 0x00)) {
+				printf("\"%s-partition\" is been protecting and should no be erased!\n",
+						MMC_RESERVED_NAME);
+				return CMD_RET_FAILURE;
+			}
+
+			part_info = find_mmc_partition_by_name(p_name);
+			if (part_info == NULL)
+				return CMD_RET_FAILURE;
+
+			blk = part_info->offset>> blk_shift;
+			if (emmc_cur_partition
+					&& !strncmp(p_name, "bootloader", strlen("bootloader")))
+				cnt = mmc->boot_size>> blk_shift;
+			else
+				cnt = part_info->size>> blk_shift;
+			n = mmc->block_dev.block_erase(dev, blk, cnt);
+			printf("store erase \"%s-partition\" is %s\n", p_name, n ? "fail" : "ok");
+			if (n)
+				return CMD_RET_FAILURE;
+		}
+	} else
+		return CMD_RET_USAGE;
+
     return 0;
 }
 
@@ -1361,8 +1412,11 @@ U_BOOT_CMD(store, CONFIG_SYS_MAXARGS, 1, do_store,
 	"	write uboot to the boot device\n"
 	"store erase boot/data: \n"
 	"	erase the area which is uboot or data \n"
+	"store erase partition <partition_name>: \n"
+	"	erase the area which partition in u-boot \n"
 	"store erase dtb \n"
 	"store erase key \n"
+	"store disprotect key \n"
 	"store rom_protect on/off \n"
 	"store scrub off|partition size\n"
 	"	scrub the area from offset and size \n"

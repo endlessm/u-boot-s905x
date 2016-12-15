@@ -31,6 +31,7 @@
 #include <linux/types.h>
 #include <amlogic/secure_storage.h>
 #include <amlogic/storage_if.h>
+#include <amlogic/amlkey_if.h>
 #ifdef CONFIG_STORE_COMPATIBLE
 #include <partition_table.h>
 #endif
@@ -62,7 +63,7 @@ static struct storagekey_info_t storagekey_info = {
 int32_t amlkey_init(uint8_t *seed, uint32_t len)
 {
 	int32_t ret = 0;
-	uint32_t buffer_size;
+	uint32_t buffer_size, actual_size;
 
 	/* do nothing for now*/
 	printf("%s() enter!\n", __func__);
@@ -75,26 +76,31 @@ int32_t amlkey_init(uint8_t *seed, uint32_t len)
 	storagekey_info.buffer = secure_storage_getbuffer(&buffer_size);
 	if (storagekey_info.buffer == NULL) {
 		printf("%s() %d: can't get buffer from bl31!\n",
-				__func__, __LINE__);
+			__func__, __LINE__);
 		ret = -1;
 		goto _out;
 	}
-	if (buffer_size != storagekey_info.size) {
-		printf("%s() %d: warnning! %d/%d\n",
-			__func__, __LINE__, buffer_size, storagekey_info.size);
-		/* using innor size!*/
-		storagekey_info.size = buffer_size;
-	}
 
 	/* full fill key infos from storage. */
-	ret = store_key_read(storagekey_info.buffer,  storagekey_info.size);
+	ret = store_key_read(storagekey_info.buffer,
+		storagekey_info.size,
+		&actual_size);
 	if (ret) {
 		/* memset head info for bl31 */
 		memset(storagekey_info.buffer, 0, SECUESTORAGE_HEAD_SIZE);
 		ret = 0;
 		goto _out;
 	}
-	secure_storage_notifier();
+
+	storagekey_info.size = actual_size;
+	secure_storage_notifier_ex(actual_size, 0);
+
+	storagekey_info.buffer = secure_storage_getbuffer(&buffer_size);
+	if (buffer_size != actual_size) {
+		ret = -1;
+		goto _out;
+	}
+
 #ifdef CONFIG_STORE_COMPATIBLE
 	info_disprotect &= ~DISPROTECT_KEY;  //protect
 #endif
@@ -125,11 +131,7 @@ int32_t amlkey_isexsit(const uint8_t * name)
 	return (int32_t)retval;
 }
 
-/**
- * 3. query if the prgrammed key is secure
- * return secure 1, non 0;
- */
-int32_t amlkey_issecure(const uint8_t * name)
+static int32_t amlkey_get_attr(const uint8_t * name)
 {
 	int32_t ret = 0;
 	uint32_t retval;
@@ -145,9 +147,26 @@ int32_t amlkey_issecure(const uint8_t * name)
 		retval = 0;
 	}
 
-	return (int32_t)retval;
+	return (int32_t)(retval);
 }
 
+/**
+ * 3.1 query if the prgrammed key is secure. key must exsit!
+ * return secure 1, non 0;
+ */
+int32_t amlkey_issecure(const uint8_t * name)
+{
+	return (amlkey_get_attr(name)&UNIFYKEY_ATTR_SECURE_MASK);
+}
+
+/**
+ * 3.2 query if the prgrammed key is encrypt
+ * return encrypt 1, non-encrypt 0;
+ */
+int32_t amlkey_isencrypt(const uint8_t * name)
+{
+	return (amlkey_get_attr(name)&UNIFYKEY_ATTR_ENCRYPT_MASK);
+}
 /**
  * 4. actual bytes of key value
  *  return actual size.
@@ -199,18 +218,21 @@ _out:
 
 /**
  * 6.write secure/non-secure key in bytes , return bytes readback actully
+ * attr: bit0, secure/non-secure;
+ *		 bit8, encrypt/non-encrypt;
  * return actual size write down.
  */
-ssize_t amlkey_write(const uint8_t *name, uint8_t *buffer, uint32_t len, uint32_t secure)
+ssize_t amlkey_write(const uint8_t *name, uint8_t *buffer, uint32_t len, uint32_t attr)
 {
 	int32_t ret = 0;
 	ssize_t retval = 0;
+	uint32_t actual_size;
 
 	if ( NULL == name ) {
 		printf("%s() %d, invalid key ", __func__, __LINE__);
 		return retval;
 	}
-	ret = secure_storage_write((uint8_t *)name, buffer, len, secure);
+	ret = secure_storage_write((uint8_t *)name, buffer, len, attr);
 	if (ret) {
 		printf("%s() %d: return %d\n", __func__, __LINE__, ret);
 		retval = 0;
@@ -219,9 +241,12 @@ ssize_t amlkey_write(const uint8_t *name, uint8_t *buffer, uint32_t len, uint32_
 		retval = (ssize_t)len;
 		/* write down! */
 		if (storagekey_info.buffer != NULL) {
-			ret = store_key_write(storagekey_info.buffer, storagekey_info.size);
+			ret = store_key_write(storagekey_info.buffer,
+				storagekey_info.size,
+				&actual_size);
 			if (ret) {
-				printf("%s() %d, store_key_write fail\n", __func__, __LINE__);
+				printf("%s() %d, store_key_write fail\n",
+					__func__, __LINE__);
 				retval = 0;
 			}
 		}
@@ -249,16 +274,21 @@ int32_t amlkey_hash_4_secure(const uint8_t * name, uint8_t * hash)
 int32_t amlkey_del(const uint8_t * name)
 {
 	int32_t ret = 0;
+	uint32_t actual_size;
 
 	ret = secure_storage_remove((uint8_t *)name);
 	if ((ret == 0) && (storagekey_info.buffer != NULL)) {
 		/* flush back */
-		ret = store_key_write(storagekey_info.buffer, storagekey_info.size);
+		ret = store_key_write(storagekey_info.buffer,
+			storagekey_info.size,
+			&actual_size);
 		if (ret) {
-			printf("%s() %d, store_key_write fail\n", __func__, __LINE__);
+			printf("%s() %d, store_key_write fail\n",
+				__func__, __LINE__);
 		}
 	} else {
-		printf("%s() %d, remove key fail\n", __func__, __LINE__);
+		printf("%s() %d, remove key fail\n",
+			__func__, __LINE__);
 	}
 
 	return ret;

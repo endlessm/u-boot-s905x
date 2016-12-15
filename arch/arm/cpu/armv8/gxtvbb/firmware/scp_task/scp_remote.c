@@ -2,6 +2,7 @@
 #include "config.h"
 #include "registers.h"
 #include "task_apis.h"
+#include "suspend.h"
 
 #ifndef CONFIG_IR_REMOTE_USE_PROTOCOL
 #define CONFIG_IR_REMOTE_USE_PROTOCOL 0
@@ -287,7 +288,6 @@ void backuremote_register(void)
 
 void resume_remote_register(void)
 {
-	int tmp = 0;
 	writel(backuAO_RTI_PIN_MUX_REG, AO_RTI_PIN_MUX_REG);
 	writel(backuAO_IR_DEC_REG0, AO_MF_IR_DEC_REG0);
 	writel(backuAO_IR_DEC_REG1, AO_MF_IR_DEC_REG1);
@@ -295,20 +295,19 @@ void resume_remote_register(void)
 	writel(backuAO_IR_DEC_LDR_IDLE, AO_MF_IR_DEC_LDR_IDLE);
 	writel(backuAO_IR_DEC_BIT_0, AO_MF_IR_DEC_BIT_0);
 	writel(bakeuAO_IR_DEC_LDR_REPEAT, AO_MF_IR_DEC_LDR_REPEAT);
-	tmp = readl(AO_MF_IR_DEC_FRAME);
+	readl(AO_MF_IR_DEC_FRAME);
 }
 
 static int ir_remote_init_32k_mode(void)
 {
-	int tmp = 0;
 	//volatile unsigned int status,data_value;
 	int val = readl(AO_RTI_PIN_MUX_REG);
 	writel((val | (1 << 12)), AO_RTI_PIN_MUX_REG);
 	set_remote_mode(CONFIG_IR_REMOTE_USE_PROTOCOL);
 	//status = readl(AO_MF_IR_DEC_STATUS);
-	tmp = readl(AO_MF_IR_DEC_STATUS);
+	readl(AO_MF_IR_DEC_STATUS);
 	//data_value = readl(AO_MF_IR_DEC_FRAME);
-	tmp = readl(AO_MF_IR_DEC_FRAME);
+	readl(AO_MF_IR_DEC_FRAME);
 
 	//step 2 : request nec_remote irq  & enable it
 	return 0;
@@ -339,24 +338,31 @@ static int init_remote(void)
 	return 0;
 }
 
+extern unsigned int scan_remote_key[1];
+
 static int remote_detect_key(void)
 {
 	unsigned power_key;
 	int j;
+	unsigned *irq = (unsigned *)SCP_SHARE_TO_WARMBOOT;
 #if 1
 	if (((readl(AO_IR_DEC_STATUS)) >> 3) & 0x1) {
 		power_key = readl(AO_IR_DEC_FRAME);
 		for (j = 0; j < CONFIG_IR_REMOTE_POWER_UP_KEY_CNT; j++) {
-		if ((power_key & IR_POWER_KEY_MASK) == kk[j])
-		return 1;
+			if ((power_key & IR_POWER_KEY_MASK) == kk[j]) {
+				irq[IRQ_AO_IR_DEC]  = kk[j];
+				return 1;
+			}
 		}
 	}
 #endif
 	if (((readl(AO_MF_IR_DEC_STATUS)) >> 3) & 0x1) {
 		power_key = readl(AO_MF_IR_DEC_FRAME);
 		for (j = 0; j < CONFIG_IR_REMOTE_POWER_UP_KEY_CNT; j++) {
-		if ((power_key&IR_POWER_KEY_MASK) == kk[j])
-			return 1;
+			if ((power_key&IR_POWER_KEY_MASK) == kk[j]) {
+				irq[IRQ_AO_IR_DEC] = kk[j];
+				return 1;
+			}
 		}
 	}
 	return 0;

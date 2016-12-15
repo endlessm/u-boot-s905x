@@ -15,6 +15,7 @@
 
 #include <common.h>
 #include <malloc.h>
+#include <asm/cpu_id.h>
 #include <asm/arch/gpio.h>
 #ifdef CONFIG_OF_LIBFDT
 #include <libfdt.h>
@@ -34,10 +35,10 @@ static struct aml_lcd_drv_s aml_lcd_driver;
 
 static void lcd_chip_detect(void)
 {
-#if 0
+#if 1
 	unsigned int cpu_type;
 
-	cpu_type = get_cpu_type();
+	cpu_type = get_cpu_id().family_id;
 	switch (cpu_type) {
 	case MESON_CPU_MAJOR_ID_M8:
 		aml_lcd_driver.chip_type = LCD_CHIP_M8;
@@ -54,11 +55,14 @@ static void lcd_chip_detect(void)
 	case MESON_CPU_MAJOR_ID_GXTVBB:
 		aml_lcd_driver.chip_type = LCD_CHIP_GXTVBB;
 		break;
+	case MESON_CPU_MAJOR_ID_TXL:
+		aml_lcd_driver.chip_type = LCD_CHIP_TXL;
+		break;
 	default:
 		aml_lcd_driver.chip_type = LCD_CHIP_MAX;
 	}
 #else
-	aml_lcd_driver.chip_type = LCD_CHIP_GXTVBB;
+	aml_lcd_driver.chip_type = LCD_CHIP_TXL;
 #endif
 	if (lcd_debug_print_flag)
 		LCDPR("check chip: %d\n", aml_lcd_driver.chip_type);
@@ -215,17 +219,27 @@ static void lcd_timing_info_print(struct lcd_config_s * pconf)
 	vs_pol = pconf->lcd_timing.vsync_pol;
 
 	printf("h_period          %d\n"
-	   "v_period          %d\n"
-	   "hs_width          %d\n"
-	   "hs_backporch      %d\n"
-	   "hs_pol            %d\n"
-	   "vs_width          %d\n"
-	   "vs_backporch      %d\n"
-	   "vs_pol            %d\n"
-	   "video_on_pixel    %d\n"
-	   "video_on_line     %d\n\n",
-	   h_period, v_period, hs_width, hs_bp, hs_pol,
-	   vs_width, vs_bp, vs_pol, video_on_pixel, video_on_line);
+		"v_period          %d\n"
+		"hs_width          %d\n"
+		"hs_backporch      %d\n"
+		"hs_pol            %d\n"
+		"vs_width          %d\n"
+		"vs_backporch      %d\n"
+		"vs_pol            %d\n"
+		"video_on_pixel    %d\n"
+		"video_on_line     %d\n\n",
+		h_period, v_period, hs_width, hs_bp, hs_pol,
+		vs_width, vs_bp, vs_pol, video_on_pixel, video_on_line);
+
+	printf("h_period_min      %d\n"
+		"h_period_max      %d\n"
+		"v_period_min      %d\n"
+		"v_period_max      %d\n"
+		"pclk_min          %d\n"
+		"pclk_max          %d\n\n",
+		pconf->lcd_basic.h_period_min, pconf->lcd_basic.h_period_max,
+		pconf->lcd_basic.v_period_min, pconf->lcd_basic.v_period_max,
+		pconf->lcd_basic.lcd_clk_min, pconf->lcd_basic.lcd_clk_max);
 }
 
 static void lcd_power_info_print(struct lcd_config_s *pconf, int status)
@@ -306,13 +320,17 @@ static void lcd_info_print(void)
 		   "pn_swap           %u\n"
 		   "port_swap         %u\n"
 		   "phy_vswing        %u\n"
-		   "phy_preemphasis   %u\n\n",
+		   "phy_preem         %u\n"
+		   "phy_clk_vswing    %u\n"
+		   "phy_clk_preem     %u\n\n",
 		   pconf->lcd_control.lvds_config->lvds_repack,
 		   pconf->lcd_control.lvds_config->dual_port,
 		   pconf->lcd_control.lvds_config->pn_swap,
 		   pconf->lcd_control.lvds_config->port_swap,
 		   pconf->lcd_control.lvds_config->phy_vswing,
-		   pconf->lcd_control.lvds_config->phy_preem);
+		   pconf->lcd_control.lvds_config->phy_preem,
+		   pconf->lcd_control.lvds_config->phy_clk_vswing,
+		   pconf->lcd_control.lvds_config->phy_clk_preem);
 		break;
 	case LCD_VBYONE:
 		printf("lane_count        %u\n"
@@ -325,6 +343,18 @@ static void lcd_info_print(void)
 		   pconf->lcd_control.vbyone_config->byte_mode,
 		   pconf->lcd_control.lvds_config->phy_vswing,
 		   pconf->lcd_control.lvds_config->phy_preem);
+		break;
+	case LCD_TTL:
+		printf("clk_pol           %u\n"
+		   "hvsync_valid      %u\n"
+		   "DE_valid          %u\n"
+		   "bit_swap          %u\n"
+		   "rb_swap           %u\n\n",
+		   pconf->lcd_control.ttl_config->clk_pol,
+		   (pconf->lcd_control.ttl_config->sync_valid >> 0) & 1,
+		   (pconf->lcd_control.ttl_config->sync_valid >> 1) & 1,
+		   (pconf->lcd_control.ttl_config->swap_ctrl >> 0) & 1,
+		   (pconf->lcd_control.ttl_config->swap_ctrl >> 1) & 1);
 		break;
 	default:
 		break;
@@ -442,7 +472,17 @@ static void lcd_vbyone_reg_print(void)
 	unsigned int reg;
 
 	printf("\nvbyone registers:\n");
-	reg = PERIPHS_PIN_MUX_7;
+	switch (aml_lcd_driver.chip_type) {
+	case LCD_CHIP_GXTVBB:
+		reg = PERIPHS_PIN_MUX_7;
+		break;
+	case LCD_CHIP_TXL:
+		reg = PERIPHS_PIN_MUX_0;
+		break;
+	default:
+		reg = PERIPHS_PIN_MUX_0;
+		break;
+	}
 	printf("VX1_PINMUX          [0x%04x] = 0x%08x\n",
 		reg, lcd_periphs_read(reg));
 	reg = VBO_STATUS_L;
@@ -653,7 +693,7 @@ static int lcd_mode_probe(void)
 {
 	int load_id = 0;
 	unsigned int lcd_debug_test = 0;
-	char *dt_addr;
+	char *dt_addr, *str;
 	int ret;
 
 	dt_addr = NULL;
@@ -671,7 +711,14 @@ static int lcd_mode_probe(void)
 	}
 #endif
 
-	lcd_debug_test = simple_strtoul(getenv("lcd_debug_test"), NULL, 10);
+	str = getenv("lcd_debug_test");
+	if (str == NULL) {
+		lcd_debug_test = 0;
+		LCDPR("no lcd_debug_test flag\n");
+	} else {
+		lcd_debug_test = simple_strtoul(str, NULL, 10);
+		LCDPR("lcd_debug_test flag: %d\n", lcd_debug_test);
+	}
 	if (lcd_debug_test)
 		load_id = 0x0;
 
@@ -752,8 +799,16 @@ int lcd_probe(void)
 #ifdef LCD_DEBUG_INFO
 	lcd_debug_print_flag = 1;
 #else
-	lcd_debug_print_flag = 0;
-	lcd_debug_print_flag = simple_strtoul(getenv("lcd_debug_print"), NULL, 10);
+	char *str;
+
+	str = getenv("lcd_debug_print");
+	if (str == NULL) {
+		lcd_debug_print_flag = 0;
+		LCDPR("no lcd_debug_print flag\n");
+	} else {
+		lcd_debug_print_flag = simple_strtoul(str, NULL, 10);
+		LCDPR("lcd_debug_print flag: %d\n", lcd_debug_print_flag);
+	}
 #endif
 
 	lcd_chip_detect();

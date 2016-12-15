@@ -69,7 +69,7 @@
 /* args/envs */
 #define CONFIG_SYS_MAXARGS  64
 #define CONFIG_EXTRA_ENV_SETTINGS \
-	"firstboot=1\0"\
+	"firstboot=0\0"\
 	"upgrade_step=0\0"\
 	"loadaddr=1080000\0"\
 	"dtb_mem_addr=0x1000000\0" \
@@ -396,7 +396,10 @@
 
 /* other functions */
 #define CONFIG_NEED_BL301	1
-#define CONFIG_BOOTDELAY	1
+#define CONFIG_NEED_BL32	1
+#define CONFIG_CMD_RSVMEM	1
+#define CONFIG_FIP_IMG_SUPPORT	1
+#define CONFIG_BOOTDELAY	1 //delay 1s
 #define CONFIG_SYS_LONGHELP 1
 #define CONFIG_CMD_MISC         1
 #define CONFIG_CMD_ITEST    1

@@ -85,6 +85,7 @@
 #define SECURITY_KEY_NOTIFY	0x82000066
 #define SECURITY_KEY_LIST		0x82000067
 #define SECURITY_KEY_REMOVE	0x82000068
+#define SECURITY_KEY_NOTIFY_EX	0x82000069
 
 /* Secure HAL APIs */
 #define TRUSTZONE_HAL_API_SRAM                  0x400
@@ -113,6 +114,7 @@ struct sram_hal_api_arg {
 	#define AML_D_P_W_EFUSE_SECURE_BOOT  (0x10)
 	#define AML_D_P_W_EFUSE_PASSWORD     (0x11)
 	#define AML_D_P_W_EFUSE_CUSTOMER_ID  (0x12)
+	#define AML_D_P_W_EFUSE_AMLOGIC 	 (0x20)
 	#define AML_D_P_IMG_DECRYPT          (0x40)
 	#define AML_D_P_UPGRADE_CHECK        (0x80)
 

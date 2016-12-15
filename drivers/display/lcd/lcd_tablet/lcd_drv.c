@@ -178,7 +178,7 @@ static void lcd_ttl_pinmux_set(int status)
 
 static void lcd_lvds_phy_set(struct lcd_config_s *pconf, int status)
 {
-	unsigned int vswing, preem;
+	unsigned int vswing, preem, clk_vswing, clk_preem;
 	unsigned int data32;
 
 	if (lcd_debug_print_flag)
@@ -187,6 +187,8 @@ static void lcd_lvds_phy_set(struct lcd_config_s *pconf, int status)
 	if (status) {
 		vswing = pconf->lcd_control.lvds_config->phy_vswing;
 		preem = pconf->lcd_control.lvds_config->phy_preem;
+		clk_vswing = pconf->lcd_control.lvds_config->phy_clk_vswing;
+		clk_preem = pconf->lcd_control.lvds_config->phy_clk_preem;
 		if (vswing > 7) {
 			LCDERR("%s: wrong vswing_level=%d, use default\n",
 				__func__, vswing);
@@ -197,11 +199,23 @@ static void lcd_lvds_phy_set(struct lcd_config_s *pconf, int status)
 				__func__, preem);
 			preem = LVDS_PHY_PREEM_DFT;
 		}
+		if (clk_vswing > 7) {
+			LCDERR("%s: wrong clk_vswing_level=%d, use default\n",
+				__func__, clk_vswing);
+			clk_vswing = LVDS_PHY_CLK_VSWING_DFT;
+		}
+		if (clk_preem > 7) {
+			LCDERR("%s: wrong clk_preem_level=%d, use default\n",
+				__func__, clk_preem);
+			clk_preem = LVDS_PHY_CLK_PREEM_DFT;
+		}
 		data32 = 0x606cca80 | (vswing << 26) | (preem << 0);
 		lcd_hiu_write(HHI_DIF_CSI_PHY_CNTL1, data32);
 		/*lcd_hiu_write(HHI_DIF_CSI_PHY_CNTL1, 0x6c6cca80);*/
 		lcd_hiu_write(HHI_DIF_CSI_PHY_CNTL2, 0x0000006c);
-		lcd_hiu_write(HHI_DIF_CSI_PHY_CNTL3, 0x0fff0800);
+		data32 = 0x0fff0800 | (clk_vswing << 8) | (clk_preem << 5);
+		lcd_hiu_write(HHI_DIF_CSI_PHY_CNTL3, data32);
+		/*lcd_hiu_write(HHI_DIF_CSI_PHY_CNTL3, 0x0fff0800);*/
 	} else {
 		lcd_hiu_write(HHI_DIF_CSI_PHY_CNTL1, 0x0);
 		lcd_hiu_write(HHI_DIF_CSI_PHY_CNTL2, 0x0);
@@ -305,19 +319,12 @@ static void lcd_ttl_control_set(struct lcd_config_s *pconf)
 
 static void lcd_lvds_clk_util_set(struct lcd_config_s *pconf)
 {
-	unsigned int fifo_mode, phy_div, dual_port;
+	unsigned int phy_div;
 
-	dual_port = pconf->lcd_control.lvds_config->dual_port;
-	if (dual_port) {
-		fifo_mode = 0x3;
+	if (pconf->lcd_control.lvds_config->dual_port)
 		phy_div = 2;
-	} else {
-		fifo_mode = 0x1;
+	else
 		phy_div = 1;
-	}
-
-	lcd_vcbus_write(LVDS_GEN_CNTL, (lcd_vcbus_read(LVDS_GEN_CNTL) | (1 << 4) | (fifo_mode << 0)));
-	lcd_vcbus_setb(LVDS_GEN_CNTL, 1, 3, 1);
 
 	/* set fifo_clk_sel: div 7 */
 	lcd_hiu_write(HHI_LVDS_TX_PHY_CNTL0, (1 << 6));
@@ -334,10 +341,9 @@ static void lcd_lvds_clk_util_set(struct lcd_config_s *pconf)
 static void lcd_lvds_control_set(struct lcd_config_s *pconf)
 {
 	unsigned int bit_num = 1;
-	unsigned int pn_swap = 0;
-	unsigned int dual_port = 1;
+	unsigned int pn_swap, port_swap;
+	unsigned int dual_port, fifo_mode;
 	unsigned int lvds_repack = 1;
-	unsigned int port_swap = 0;
 
 	if (lcd_debug_print_flag)
 		LCDPR("%s\n", __func__);
@@ -366,6 +372,10 @@ static void lcd_lvds_control_set(struct lcd_config_s *pconf)
 		bit_num=1;
 		break;
 	}
+	if (dual_port)
+		fifo_mode = 0x3;
+	else
+		fifo_mode = 0x1;
 
 	lcd_vcbus_write(LVDS_PACK_CNTL_ADDR,
 			(lvds_repack << 0) | // repack
@@ -379,6 +389,14 @@ static void lcd_lvds_control_set(struct lcd_config_s *pconf)
 			(0 << 10) |		//r_select  //0:R, 1:G, 2:B, 3:0
 			(1 << 12) |		//g_select  //0:R, 1:G, 2:B, 3:0
 			(2 << 14));		//b_select  //0:R, 1:G, 2:B, 3:0;
+
+	lcd_vcbus_write(LVDS_GEN_CNTL, (lcd_vcbus_read(LVDS_GEN_CNTL) | (1 << 4) | (fifo_mode << 0)));
+	lcd_vcbus_setb(LVDS_GEN_CNTL, 1, 3, 1);
+}
+
+static void lcd_lvds_disable(void)
+{
+	lcd_vcbus_setb(LVDS_GEN_CNTL, 0, 3, 1); /* disable lvds fifo */
 }
 
 static void lcd_venc_set(struct lcd_config_s *pconf)
@@ -426,8 +444,9 @@ void lcd_tablet_driver_init_pre(void)
 	struct lcd_config_s *pconf;
 	int ret;
 
-	LCDPR("tablet driver init(ver: %s)\n", lcd_drv->version);
 	pconf = lcd_drv->lcd_config;
+	LCDPR("tablet driver init(ver %s): %s\n", lcd_drv->version,
+		lcd_type_type_to_str(pconf->lcd_basic.lcd_type));
 	ret = lcd_type_supported(pconf);
 	if (ret)
 		return;
@@ -487,7 +506,7 @@ void lcd_tablet_driver_disable(void)
 		break;
 	case LCD_LVDS:
 		lcd_lvds_phy_set(pconf, 0);
-		lcd_vcbus_setb(LVDS_GEN_CNTL, 0, 3, 1); /* disable lvds fifo */
+		lcd_lvds_disable();
 		break;
 	default:
 		break;
