@@ -71,6 +71,9 @@
 	"loadaddr=0x1080000\0"\
 	"initrd_loadaddr=0x13000000\0"\
 	"script_loadaddr=0x11000000\0"\
+	"init_cvbs="\
+		"cvbs init; cvbs output 576cvbs"\
+		"\0"\
 	"get_rootuuid="\
 		"fsuuid mmc ${bootdev}:1 rootuuid"\
 		"\0"\
@@ -107,7 +110,7 @@
 		"run uenv_bootcmd"\
 		"\0"\
 
-#define CONFIG_PREBOOT				"store init"
+#define CONFIG_PREBOOT				"store init; run init_cvbs"
 #define CONFIG_BOOTCOMMAND			"run endless_select_bootdev"
 
 #define CONFIG_ENV_IS_NOWHERE
