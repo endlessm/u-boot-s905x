@@ -23,7 +23,7 @@
 #include <errno.h>
 
 
-#if (defined(CONFIG_STORE_COMPATIBLE) && !defined(CONFIG_ENV_IS_NOWHERE))
+#ifdef CONFIG_STORE_COMPATIBLE
 #include <emmc_partitions.h>
 #include <partition_table.h>
 

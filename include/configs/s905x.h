@@ -113,7 +113,6 @@
 #define CONFIG_PREBOOT				"store init; run init_cvbs"
 #define CONFIG_BOOTCOMMAND			"run endless_select_bootdev"
 
-#define CONFIG_ENV_IS_NOWHERE
 #define CONFIG_ENV_SIZE				(64 * 1024)
 #define CONFIG_ENV_OVERWRITE
 #define CONFIG_CMD_SAVEENV
