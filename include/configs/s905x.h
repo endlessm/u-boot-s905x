@@ -42,8 +42,6 @@
 #define CONFIG_CEC_OSD_NAME			"Mbox"
 #define CONFIG_CEC_WAKEUP
 
-#define CONFIG_INSTABOOT
-
 /* SMP Definitinos */
 #define CPU_RELEASE_ADDR			secondary_boot_func
 
@@ -110,13 +108,13 @@
 		"run uenv_bootcmd"\
 		"\0"\
 
-#define CONFIG_PREBOOT				"store init; run init_cvbs"
 #define CONFIG_BOOTCOMMAND			"run endless_select_bootdev"
 
-#define CONFIG_ENV_IS_NOWHERE
 #define CONFIG_ENV_SIZE				(64 * 1024)
+#define CONFIG_ENV_OFFSET			0xF0000
 #define CONFIG_ENV_OVERWRITE
 #define CONFIG_CMD_SAVEENV
+#define CONFIG_ENV_IS_IN_MMC
 
 /* Image setup */
 #define CONFIG_FIT
@@ -156,9 +154,6 @@
 #define CONFIG_DDR_LOW_POWER			0	/* 0:disable, 1:enable. ddr clk gate for lp */
 #define CONFIG_DDR_ZQ_PD			0	/* 0:disable, 1:enable. ddr zq power down */
 #define CONFIG_DDR_USE_EXT_VREF			0	/* 0:disable, 1:enable. ddr use external vref */
-
-/* storage: eMMC/NAND/SD */
-#define	CONFIG_STORE_COMPATIBLE
 
 #if (defined(CONFIG_ENV_IS_IN_AMLNAND) || defined(CONFIG_ENV_IS_IN_MMC)) && defined(CONFIG_STORE_COMPATIBLE)
 #error env in amlnand/mmc already be compatible;
@@ -206,15 +201,6 @@
 #define CONFIG_USB_XHCI
 #define CONFIG_USB_XHCI_AMLOGIC_GXL
 #endif
-
-/* U-Boot Factory USB/SD burning config */
-#define CONFIG_AML_V2_FACTORY_BURN
-#define CONFIG_AML_FACTORY_BURN_LOCAL_UPGRADE
-#define CONFIG_POWER_KEY_NOT_SUPPORTED_FOR_BURN
-#define CONFIG_SD_BURNING_SUPPORT_UI		1
-
-#define CONFIG_AML_SECURITY_KEY
-#define CONFIG_UNIFY_KEY_MANAGE
 
 /* NET */
 #define CONFIG_CMD_NET
