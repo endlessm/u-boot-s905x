@@ -108,7 +108,6 @@
 		"run uenv_bootcmd"\
 		"\0"\
 
-#define CONFIG_PREBOOT				"run init_cvbs"
 #define CONFIG_BOOTCOMMAND			"run endless_select_bootdev"
 
 #define CONFIG_ENV_SIZE				(64 * 1024)
