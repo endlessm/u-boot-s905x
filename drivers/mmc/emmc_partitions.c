@@ -129,7 +129,7 @@ static struct partitions* find_partition_by_name (struct partitions *part_tbl, i
         if (!part_tbl[i].name || (part_tbl[i].name[0] == '\0'))
             break;
 
-	    if (!strncmp(part_tbl[i].name, name, MAX_MMC_PART_NAME_LEN)) {
+	if (!strncmp(part_tbl[i].name, name, MAX_MMC_PART_NAME_LEN)) {
             return &(part_tbl[i]);
         }
 	}
